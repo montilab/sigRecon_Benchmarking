@@ -1,0 +1,215 @@
+---
+title: "Sci-Plex EDA & QC"
+author: "Andrew Chen"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: 'united'
+    toc: true
+    toc_depth: 1
+    kee_md: yes
+    toc_float: true
+    df_print: paged
+    code_folding: hide
+---
+
+```{r, echo=FALSE}
+library(tidyverse)
+library(data.table)
+library(cowplot)
+library(Seurat)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+
+options(Seurat.object.assay.version = 'v5')
+PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/sig_recon")
+DATA_PATH <- file.path(Sys.getenv("AGED"), "CBMrepositoryData/perturbational_data/srivatsan_2019")
+
+do_save <- TRUE
+```
+
+# Sci-Plex
+
+> High-throughput chemical screens typically use coarse assays such as cell survival, limiting what can be learned about mechanisms of action, off-target effects, and heterogeneous responses. Here, we introduce “sci-Plex,” which uses “nuclear hashing” to quantify global transcriptional responses to thousands of independent perturbations at single-cell resolution. As a proof of concept, we applied sci-Plex to screen three cancer cell lines exposed to 188 compounds. In total, we profiled ~650,000 single-cell transcriptomes across ~5000 independent samples in one experiment. Our results reveal substantial intercellular heterogeneity in response to specific compounds, commonalities in response to families of compounds, and insight into differential properties within families. In particular, our results with histone deacetylase inhibitors support the view that chromatin acts as an important reservoir of acetate in cancer cells.
+
+# 1. Loading Data
+```{r}
+a549 <- readRDS(file.path(DATA_PATH, "a549.rds"))
+k562 <- readRDS(file.path(DATA_PATH, "k562.rds"))
+mcf7 <- readRDS(file.path(DATA_PATH, "mcf7.rds"))
+```
+
+# 2. QC
+```{r}
+
+```
+
+## MCF7 
+```{r}
+if(do_save) {
+  mcf7_filtered <- qc_fn(mcf7)
+} else {
+  mcf7_filtered <- readRDS(file.path(PATH, "data/sci_plex/mcf7_filtered.rds"))
+}
+```
+
+```{r}
+p1 <- ggplot(mcf7@meta.data, aes(x = total_counts, 
+                                  y = n_genes_by_counts, 
+                                  color = pct_counts_mt)) +
+  geom_point(alpha = 0.5, size = 0.5) +
+  scale_color_viridis_c() +  
+  theme_minimal() +
+  labs(x = "Total Counts", 
+       y = "Number of Genes",
+       color = "% MT",
+       title = "QC Metrics")
+p2 <- ggplot(mcf7_filtered@meta.data, aes(x = total_counts, 
+                                  y = n_genes_by_counts, 
+                                  color = pct_counts_mt)) +
+  geom_point(alpha = 0.5, size = 0.5) +
+  scale_color_viridis_c() +  
+  theme_minimal() +
+  labs(x = "Total Counts", 
+       y = "Number of Genes",
+       color = "% MT",
+       title = "QC Metrics")
+plot_grid(p1, p2, labels = c("Before", "After"), ncol = 2)
+
+```
+
+## A549 
+
+```{r}
+p1 <- ggplot(a549@meta.data, aes(x = total_counts, 
+                                  y = n_genes_by_counts, 
+                                  color = pct_counts_mt)) +
+  geom_point(alpha = 0.5, size = 0.5) +
+  scale_color_viridis_c() +
+  theme_minimal() +
+  labs(x = "Total Counts", 
+       y = "Number of Genes",
+       color = "% MT",
+       title = "QC Metrics")
+p2 <- ggplot(a549_filtered@meta.data, aes(x = total_counts, 
+                                  y = n_genes_by_counts, 
+                                  color = pct_counts_mt)) +
+  geom_point(alpha = 0.5, size = 0.5) +
+  scale_color_viridis_c() + 
+  theme_minimal() +
+  labs(x = "Total Counts", 
+       y = "Number of Genes",
+       color = "% MT",
+       title = "QC Metrics")
+plot_grid(p1, p2, labels = c("Before", "After"), ncol = 2)
+```
+
+## K562 
+
+```{r}
+p1 <- ggplot(k562@meta.data, aes(x = total_counts, 
+                                  y = n_genes_by_counts, 
+                                  color = pct_counts_mt)) +
+  geom_point(alpha = 0.5, size = 0.5) +
+  scale_color_viridis_c() + 
+  theme_minimal() +
+  labs(x = "Total Counts", 
+       y = "Number of Genes",
+       color = "% MT",
+       title = "QC Metrics")
+p2 <- ggplot(k562_filtered@meta.data, aes(x = total_counts, 
+                                  y = n_genes_by_counts, 
+                                  color = pct_counts_mt)) +
+  geom_point(alpha = 0.5, size = 0.5) +
+  scale_color_viridis_c() +  
+  theme_minimal() +
+  labs(x = "Total Counts", 
+       y = "Number of Genes",
+       color = "% MT",
+       title = "QC Metrics")
+plot_grid(p1, p2, labels = c("Before", "After"), ncol = 2)
+```
+
+
+
+# 3. Signature Quality
+
+> To assess how sci-Plex scales for HTS, we performed a screen of 188 compounds targeting a diverse range of enzymes and molecular pathways (Fig. 3A). Half of this panel was chosen to target transcriptional and epigenetic regulators. The other half was chosen to sample diverse mechanisms of action. We exposed three well-characterized human cancer cell lines, A549 (lung adenocarcinoma), K562 (chronic myelogenous leukemia), and MCF7 (mammary adenocarcinoma), to each of these 188 compounds at four doses (10 nM, 100 nM, 1 μM, and 10 μM) in duplicate, randomizing compounds and doses across well positions in replicate culture plates (table S3).
+
+We will define 188 signatures for each cell-line, taking the average expression profile of each drug given at its highest dose. 
+
+```{r}
+stopifnot(setdiff(unique(a549_filtered$product_name), unique(mcf7_filtered$product_name)) == 0)
+stopifnot(setdiff(unique(a549_filtered$product_name), unique(k562_filtered$product_name)) == 0)
+products <- a549_filtered$product_name %>% unique %>% as.vector
+products <- products[products != "Vehicle"]
+
+a549_ids <- list()
+k562_ids <- list()
+mcf7_ids <- list()
+
+for (product in products) {
+  a549_ids[[product]] <- a549_filtered[[]] %>% rownames_to_column(var= "id") %>% filter(dose == 10000, product_name == product) %>% pull(id)
+  k562_ids[[product]] <- k562_filtered[[]] %>% rownames_to_column(var= "id") %>% filter(dose == 10000, product_name == product) %>% pull(id)
+  mcf7_ids[[product]] <- mcf7_filtered[[]] %>% rownames_to_column(var= "id") %>% filter(dose == 10000, product_name == product) %>% pull(id)
+}
+```
+
+## Median Correlation between expression profiles across plates and wells
+
+For each product id (188 of them), there are expression profiles measured across wells and plates. We plot the median correlation of these expression profiles across wells and plates to assess how reproducible these perturbational signatures are.
+
+```{r}
+corr_profiles <- function(seurat_obj, ids, invert=FALSE) {
+  
+  if(invert) {
+    n <- length(ids)
+    ids <- setdiff(colnames(seurat_obj), ids)
+    ids <- sample(ids, size=n)
+  }
+  
+  corr_matrix <- seurat_obj[, ids][["RNA"]]$data %>% as.matrix %>% cor 
+  corr_up_tri_matrix <- corr_matrix[upper.tri(corr_matrix)]
+  return(corr_up_tri_matrix)
+}
+
+if(do_save) {
+  # Within drug group
+  # a549_cors <- vapply(products, 
+  #                     function(x) corr_profiles(a549, a549_ids[[x]]) %>% fivenum,
+  #                     c(Min. = 0, "1st Qu." = 0, Median = 0, "3rd Qu." = 0, Max. = 0))
+  # data.table:::fwrite(a549_cors, file.path(PATH, "data/sci_plex/a549_corr.csv"))
+  # 
+  # k562_cors <- vapply(products, function(x) corr_profiles(k562, k562_ids[[x]]) %>% fivenum, c(Min. = 0, "1st Qu." = 0, Median = 0, "3rd Qu." = 0, Max. = 0))
+  # data.table:::fwrite(k562_cors, file.path(PATH, "data/sci_plex/k562_corr.csv"))
+  # 
+  # mcf7_cors <- vapply(products, function(x) corr_profiles(mcf7, mcf7_ids[[x]]) %>% fivenum, c(Min. = 0, "1st Qu." = 0, Median = 0, "3rd Qu." = 0, Max. = 0))
+  # data.table:::fwrite(mcf7_cors, file.path(PATH, "data/sci_plex/mcf7_corr.csv"))
+  
+  # Inverted 
+  a549_cors <- vapply(products, 
+                      function(x) corr_profiles(a549, a549_ids[[x]], invert = TRUE) %>% fivenum,
+                      c(Min. = 0, "1st Qu." = 0, Median = 0, "3rd Qu." = 0, Max. = 0))
+  data.table:::fwrite(a549_cors, file.path(PATH, "data/sci_plex/a549_setdiff_corr.csv"))
+  
+  k562_cors <- vapply(products, function(x) corr_profiles(k562, k562_ids[[x]], invert=TRUE) %>% fivenum, c(Min. = 0, "1st Qu." = 0, Median = 0, "3rd Qu." = 0, Max. = 0))
+  data.table:::fwrite(k562_cors, file.path(PATH, "data/sci_plex/k562_setdiff_corr.csv"))
+  
+  mcf7_cors <- vapply(products, function(x) corr_profiles(mcf7, mcf7_ids[[x]], invert=TRUE) %>% fivenum, c(Min. = 0, "1st Qu." = 0, Median = 0, "3rd Qu." = 0, Max. = 0))
+  data.table:::fwrite(mcf7_cors, file.path(PATH, "data/sci_plex/mcf7_setdiff_corr.csv"))
+} else {
+  a549_cors <- data.table::fread(file=file.path(PATH, "data/sci_plex/a549_corr.csv"))
+  k562_cors <- data.table::fread(file=file.path(PATH, "data/sci_plex/k562_corr.csv"))
+  mcf7_cors <- data.table::fread(file=file.path(PATH, "data/sci_plex/mcf7_corr.csv"))
+}
+
+```
+
+```{r}
+df <- rbind(a549_cors[3,], k562_cors[3,], mcf7_cors[3,])
+df$cell_line <- c("a549", "k562", "mcf7")
+df %>% melt(id.vars = "cell_line", variable.name = "drug", value.name = "median_corr") %>% 
+  ggplot() + 
+  geom_boxplot(aes(x=cell_line, y=median_corr, fill=cell_line))
+```
+

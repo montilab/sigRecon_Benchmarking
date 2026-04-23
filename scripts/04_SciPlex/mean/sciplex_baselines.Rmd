@@ -1,0 +1,501 @@
+---
+title: "sciplex - Baselines"
+author: "Andrew Chen"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: 'united'
+    toc: true
+    toc_depth: 1
+    toc_float: true
+    df_print: paged
+    code_folding: hide
+---
+
+```{r, echo=FALSE, message=FALSE}
+library(tidyverse)
+library(sigrecon)
+PROJECT_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon/")
+DATAPATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon/data/sigs/sciplex")
+do_save <- FALSE
+```
+
+```{r}
+#True Sig
+k562_true_sig <- sigrecon::sciplex.k562
+k562_true_sig_up <- lapply(k562_true_sig, function(x) x$up)
+a549_true_sig <- sigrecon::sciplex.a549
+a549_true_sig_up <- lapply(a549_true_sig, function(x) x$up)
+mcf7_true_sig <- sigrecon::sciplex.mcf7
+mcf7_true_sig_up <- lapply(mcf7_true_sig, function(x) x$up)
+```
+
+# No Change {.tabset}
+```{r}
+if(do_save) {
+  a549_k562_recon_eval_table <- sig_eval_table(source_sigs = a549_true_sig_up,
+                                         pred_sigs = a549_true_sig_up, 
+                                         true_sigs = k562_true_sig)
+  a549_mcf7_recon_eval_table <- sig_eval_table(source_sigs = a549_true_sig_up,
+                                           pred_sigs = a549_true_sig_up, 
+                                           true_sigs = mcf7_true_sig)
+  k562_a549_recon_eval_table <- sig_eval_table(source_sigs = k562_true_sig_up,
+                                           pred_sigs = k562_true_sig_up, 
+                                           true_sigs = a549_true_sig)
+  k562_mcf7_recon_eval_table <- sig_eval_table(source_sigs = k562_true_sig_up,
+                                           pred_sigs = k562_true_sig_up, 
+                                           true_sigs = mcf7_true_sig)
+  mcf7_a549_recon_eval_table <- sig_eval_table(source_sigs = mcf7_true_sig_up,
+                                           pred_sigs = mcf7_true_sig_up, 
+                                           true_sigs = a549_true_sig)
+  mcf7_k562_recon_eval_table <- sig_eval_table(source_sigs = mcf7_true_sig_up,
+                                           pred_sigs = mcf7_true_sig_up, 
+                                           true_sigs = k562_true_sig)
+  mcf7_k562_recon_eval_table$source <- "mcf7_k562"
+  a549_k562_recon_eval_table$source <- "a549_k562"
+  a549_mcf7_recon_eval_table$source <- "a549_mcf7"
+  k562_a549_recon_eval_table$source <- "k562_a549"
+  k562_mcf7_recon_eval_table$source <- "k562_mcf7"
+  mcf7_a549_recon_eval_table$source <- "mcf7_a549"
+  combined_no_recon_df <- rbind(mcf7_k562_recon_eval_table,
+                                a549_k562_recon_eval_table,
+                                a549_mcf7_recon_eval_table,
+                                k562_a549_recon_eval_table,
+                                k562_mcf7_recon_eval_table,
+                                mcf7_a549_recon_eval_table)
+  saveRDS(combined_no_recon_df, file.path(PROJECT_PATH, "results/eval/sciplex/no_change_eval_table.rds"))
+} else {
+  combined_no_recon_df <- readRDS(file.path(PROJECT_PATH, "results/eval/sciplex/no_change_eval_table.rds"))
+}
+
+```
+
+## Unpaired
+```{r}
+combined_no_recon_df %>% 
+  group_by(source) %>%
+  summarize(NES = mean(NES, na.rm=TRUE),
+            jacc = mean(jacc))
+```
+
+```{r}
+combined_no_recon_df %>% 
+  group_by(source) %>%
+  summarize(NES = mean(NES, na.rm = TRUE),
+            jacc = mean(jacc)) %>%
+  summarize(NES = mean(NES),
+            jacc = mean(jacc))
+```
+
+# Mean {.tabset}
+
+## Control {.tabset}
+```{r}
+#Pred Sig
+a549_sig <- readRDS(file.path(DATAPATH, "mean/ctrl/a549.rds"))
+k562_sig <- readRDS(file.path(DATAPATH, "mean/ctrl/k562.rds"))
+mcf7_sig <- readRDS(file.path(DATAPATH, "mean/ctrl/mcf7.rds"))
+a549_sig <- a549_sig[["a549"]]
+k562_sig <- k562_sig[["k562"]]
+mcf7_sig <- mcf7_sig[["mcf7"]]
+k562_pred_sig <- rep(list(k562_sig[["up"]]), length(k562_true_sig))
+names(k562_pred_sig) <- names(k562_true_sig)
+a549_pred_sig <- rep(list(a549_sig[["up"]]), length(a549_true_sig))
+names(a549_pred_sig) <- names(a549_true_sig)
+mcf7_pred_sig <- rep(list(mcf7_sig[["up"]]), length(mcf7_true_sig))
+names(mcf7_pred_sig) <- names(mcf7_true_sig)
+```
+
+```{r}
+if(do_save) {
+  a549_k562_recon_eval_table <- sig_eval_table(source_sigs = a549_true_sig_up,
+                                         pred_sigs = k562_pred_sig, 
+                                         true_sigs = k562_true_sig)
+  a549_mcf7_recon_eval_table <- sig_eval_table(source_sigs = a549_true_sig_up,
+                                           pred_sigs = mcf7_pred_sig, 
+                                           true_sigs = mcf7_true_sig)
+  k562_a549_recon_eval_table <- sig_eval_table(source_sigs = k562_true_sig_up,
+                                           pred_sigs = a549_pred_sig, 
+                                           true_sigs = a549_true_sig)
+  k562_mcf7_recon_eval_table <- sig_eval_table(source_sigs = k562_true_sig_up,
+                                           pred_sigs = mcf7_pred_sig, 
+                                           true_sigs = mcf7_true_sig)
+  mcf7_a549_recon_eval_table <- sig_eval_table(source_sigs = mcf7_true_sig_up,
+                                           pred_sigs = a549_pred_sig, 
+                                           true_sigs = a549_true_sig)
+  mcf7_k562_recon_eval_table <- sig_eval_table(source_sigs = mcf7_true_sig_up,
+                                           pred_sigs = k562_pred_sig, 
+                                           true_sigs = k562_true_sig)
+  mcf7_k562_recon_eval_table$source <- "mcf7_k562"
+  a549_k562_recon_eval_table$source <- "a549_k562"
+  a549_mcf7_recon_eval_table$source <- "a549_mcf7"
+  k562_a549_recon_eval_table$source <- "k562_a549"
+  k562_mcf7_recon_eval_table$source <- "k562_mcf7"
+  mcf7_a549_recon_eval_table$source <- "mcf7_a549"
+  combined_df <- rbind(mcf7_k562_recon_eval_table,
+                       a549_k562_recon_eval_table,
+                       a549_mcf7_recon_eval_table,
+                       k562_a549_recon_eval_table,
+                       k562_mcf7_recon_eval_table,
+                       mcf7_a549_recon_eval_table)
+  saveRDS(combined_df, file.path(PROJECT_PATH, "results/eval/sciplex/ctrl_mean_eval_table.rds"))
+} else {
+  combined_df <- readRDS(file.path(PROJECT_PATH, "results/eval/sciplex/ctrl_mean_eval_table.rds"))
+}
+
+```
+
+```{r}
+combined_aggregated_df <- merge(combined_no_recon_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
+                                combined_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
+                                by = c("source", "gene"), 
+                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+```
+
+### Unpaired
+```{r}
+combined_df %>% 
+  group_by(source) %>%
+  summarize(NES = mean(NES, na.rm=TRUE),
+            jacc = mean(jacc))
+```
+
+```{r}
+combined_df %>% 
+  group_by(source) %>%
+  summarize(NES = mean(NES, na.rm = TRUE),
+            jacc = mean(jacc)) %>%
+  summarize(NES = mean(NES),
+            jacc = mean(jacc))
+```
+
+### Paired
+```{r}
+combined_aggregated_df %>% 
+  group_by(source) %>% 
+  summarize(Jacc_Wilcox_pval = wilcox.test(jacc_TRUE, jacc_FALSE, paired = TRUE, alternative="greater")$p.value,
+            KS_Wilcox_pval = wilcox.test(NES_TRUE, NES_FALSE, paired = TRUE, alternative="greater")$p.value)
+```
+
+```{r}
+combined_aggregated_df %>% 
+  group_by(source) %>% 
+  summarize(Jacc_Wilcox_pval = wilcox.test(jacc_TRUE, jacc_FALSE, paired = TRUE, alternative="greater")$p.value,
+            KS_Wilcox_pval = wilcox.test(NES_TRUE, NES_FALSE, paired = TRUE, alternative="greater")$p.value) %>%
+  summarize(KS_meta_p = fishers_meta_p(KS_Wilcox_pval),
+            Jacc_meta_p = fishers_meta_p(Jacc_Wilcox_pval))
+```
+
+## 1/10th {.tabset}
+```{r}
+#Pred Sig
+a549_sig <- readRDS(file.path(DATAPATH, "mean/10th_perturb/a549_10_signatures.rds"))
+k562_sig <- readRDS(file.path(DATAPATH, "mean/10th_perturb/k562_10_signatures.rds"))
+mcf7_sig <- readRDS(file.path(DATAPATH, "mean/10th_perturb/mcf7_10_signatures.rds"))
+k562_pred_sig <- list()
+for(split in 1:length(k562_sig)) {
+  k562_pred_sig[[split]] <- rep(list(k562_sig[[split]][["up"]]), length(k562_true_sig))
+  names(k562_pred_sig[[split]]) <- names(k562_true_sig)  
+}
+names(k562_pred_sig) <- paste0("split_", 1:10)
+a549_pred_sig <- list()
+for(split in 1:length(a549_sig)) {
+  a549_pred_sig[[split]] <- rep(list(a549_sig[[split]][["up"]]), length(a549_true_sig))
+  names(a549_pred_sig[[split]]) <- names(a549_true_sig)  
+}
+names(a549_pred_sig) <- paste0("split_", 1:10)
+mcf7_pred_sig <- list()
+for(split in 1:length(mcf7_sig)) {
+  mcf7_pred_sig[[split]] <- rep(list(mcf7_sig[[split]][["up"]]), length(mcf7_true_sig))
+  names(mcf7_pred_sig[[split]]) <- names(mcf7_true_sig)  
+}
+names(mcf7_pred_sig) <- paste0("split_", 1:10)
+```
+
+```{r}
+if(do_save) {
+  a549_k562_recon_eval_table <- sig_eval_table(source_sigs = a549_true_sig_up,
+                                         pred_sigs = k562_pred_sig, 
+                                         true_sigs = k562_true_sig,
+                                         splits = TRUE,
+                                         split_file = file.path(PROJECT_PATH, "data/sigs/sciplex/drug_splits.csv"),
+                                       split_pb_col = "drug",
+                                       split_type = "10th")
+  a549_mcf7_recon_eval_table <- sig_eval_table(source_sigs = a549_true_sig_up,
+                                           pred_sigs = mcf7_pred_sig, 
+                                           true_sigs = mcf7_true_sig,
+                                           splits=TRUE,
+                                           split_file = file.path(PROJECT_PATH, "data/sigs/sciplex/drug_splits.csv"),
+                                       split_pb_col = "drug",
+                                       split_type = "10th")
+  k562_a549_recon_eval_table <- sig_eval_table(source_sigs = k562_true_sig_up,
+                                           pred_sigs = a549_pred_sig, 
+                                           true_sigs = a549_true_sig,
+                                           splits=TRUE,
+                                           split_file = file.path(PROJECT_PATH, "data/sigs/sciplex/drug_splits.csv"),
+                                       split_pb_col = "drug",
+                                       split_type = "10th")
+  k562_mcf7_recon_eval_table <- sig_eval_table(source_sigs = k562_true_sig_up,
+                                           pred_sigs = mcf7_pred_sig, 
+                                           true_sigs = mcf7_true_sig,
+                                           splits=TRUE,
+                                           split_file = file.path(PROJECT_PATH, "data/sigs/sciplex/drug_splits.csv"),
+                                       split_pb_col = "drug",
+                                       split_type = "10th")
+  mcf7_a549_recon_eval_table <- sig_eval_table(source_sigs = mcf7_true_sig_up,
+                                           pred_sigs = a549_pred_sig, 
+                                           true_sigs = a549_true_sig,
+                                           splits=TRUE,
+                                           split_file = file.path(PROJECT_PATH, "data/sigs/sciplex/drug_splits.csv"),
+                                       split_pb_col = "drug",
+                                       split_type = "10th")
+  mcf7_k562_recon_eval_table <- sig_eval_table(source_sigs = mcf7_true_sig_up,
+                                           pred_sigs = k562_pred_sig, 
+                                           true_sigs = k562_true_sig,
+                                           splits=TRUE,
+                                           split_file = file.path(PROJECT_PATH, "data/sigs/sciplex/drug_splits.csv"),
+                                       split_pb_col = "drug",
+                                       split_type = "10th")
+  mcf7_k562_recon_eval_table$source <- "mcf7_k562"
+  a549_k562_recon_eval_table$source <- "a549_k562"
+  a549_mcf7_recon_eval_table$source <- "a549_mcf7"
+  k562_a549_recon_eval_table$source <- "k562_a549"
+  k562_mcf7_recon_eval_table$source <- "k562_mcf7"
+  mcf7_a549_recon_eval_table$source <- "mcf7_a549"
+  combined_df <- rbind(mcf7_k562_recon_eval_table,
+                       a549_k562_recon_eval_table,
+                       a549_mcf7_recon_eval_table,
+                       k562_a549_recon_eval_table,
+                       k562_mcf7_recon_eval_table,
+                       mcf7_a549_recon_eval_table)
+    saveRDS(combined_df, file.path(PROJECT_PATH, "results/eval/sciplex/ctrl_10th_mean_eval_table.rds"))
+} else {
+  combined_df <- readRDS(file.path(PROJECT_PATH, "results/eval/sciplex/ctrl_10th_mean_eval_table.rds"))
+}
+```
+
+```{r}
+combined_aggregated_df <- merge(combined_no_recon_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
+                                combined_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
+                                by = c("source", "gene"), 
+                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+```
+
+### Unpaired
+```{r}
+combined_df %>% 
+  group_by(source) %>%
+  summarize(NES = mean(NES, na.rm=TRUE),
+            jacc = mean(jacc))
+```
+
+```{r}
+combined_df %>% 
+  group_by(source) %>%
+  summarize(NES = mean(NES, na.rm = TRUE),
+            jacc = mean(jacc)) %>%
+  summarize(NES = mean(NES),
+            jacc = mean(jacc))
+```
+
+### Paired
+```{r}
+combined_aggregated_df %>% 
+  group_by(source) %>% 
+  summarize(Jacc_Wilcox_pval = wilcox.test(jacc_TRUE, jacc_FALSE, paired = TRUE, alternative="greater")$p.value,
+            KS_Wilcox_pval = wilcox.test(NES_TRUE, NES_FALSE, paired = TRUE, alternative="greater")$p.value)
+```
+
+```{r}
+combined_aggregated_df %>% 
+  group_by(source) %>% 
+  summarize(Jacc_Wilcox_pval = wilcox.test(jacc_TRUE, jacc_FALSE, paired = TRUE, alternative="greater")$p.value,
+            KS_Wilcox_pval = wilcox.test(NES_TRUE, NES_FALSE, paired = TRUE, alternative="greater")$p.value) %>%
+  summarize(KS_meta_p = fishers_meta_p(KS_Wilcox_pval),
+            Jacc_meta_p = fishers_meta_p(Jacc_Wilcox_pval))
+```
+
+## 9/10th {.tabset}
+```{r}
+#Pred Sig
+a549_sig <- readRDS(file.path(DATAPATH, "mean/90th_perturb/a549_90_signatures.rds"))
+k562_sig <- readRDS(file.path(DATAPATH, "mean/90th_perturb/k562_90_signatures.rds"))
+mcf7_sig <- readRDS(file.path(DATAPATH, "mean/90th_perturb/mcf7_90_signatures.rds"))
+k562_pred_sig <- list()
+for(split in 1:length(k562_sig)) {
+  k562_pred_sig[[split]] <- rep(list(k562_sig[[split]][["up"]]), length(k562_true_sig))
+  names(k562_pred_sig[[split]]) <- names(k562_true_sig)  
+}
+names(k562_pred_sig) <- paste0("split_", 1:10)
+a549_pred_sig <- list()
+for(split in 1:length(a549_sig)) {
+  a549_pred_sig[[split]] <- rep(list(a549_sig[[split]][["up"]]), length(a549_true_sig))
+  names(a549_pred_sig[[split]]) <- names(a549_true_sig)  
+}
+names(a549_pred_sig) <- paste0("split_", 1:10)
+mcf7_pred_sig <- list()
+for(split in 1:length(mcf7_sig)) {
+  mcf7_pred_sig[[split]] <- rep(list(mcf7_sig[[split]][["up"]]), length(mcf7_true_sig))
+  names(mcf7_pred_sig[[split]]) <- names(mcf7_true_sig)  
+}
+names(mcf7_pred_sig) <- paste0("split_", 1:10)
+```
+
+```{r}
+if(do_save) {
+  a549_k562_recon_eval_table <- sig_eval_table(source_sigs = a549_true_sig_up,
+                                         pred_sigs = k562_pred_sig, 
+                                         true_sigs = k562_true_sig,
+                                         splits = TRUE,
+                                         split_file = file.path(PROJECT_PATH, "data/sigs/sciplex/drug_splits.csv"),
+                                       split_pb_col = "drug",
+                                       split_type = "90th")
+  a549_mcf7_recon_eval_table <- sig_eval_table(source_sigs = a549_true_sig_up,
+                                           pred_sigs = mcf7_pred_sig, 
+                                           true_sigs = mcf7_true_sig,
+                                           splits=TRUE,
+                                           split_file = file.path(PROJECT_PATH, "data/sigs/sciplex/drug_splits.csv"),
+                                       split_pb_col = "drug",
+                                       split_type = "90th")
+  k562_a549_recon_eval_table <- sig_eval_table(source_sigs = k562_true_sig_up,
+                                           pred_sigs = a549_pred_sig, 
+                                           true_sigs = a549_true_sig,
+                                           splits=TRUE,
+                                           split_file = file.path(PROJECT_PATH, "data/sigs/sciplex/drug_splits.csv"),
+                                       split_pb_col = "drug",
+                                       split_type = "90th")
+  k562_mcf7_recon_eval_table <- sig_eval_table(source_sigs = k562_true_sig_up,
+                                           pred_sigs = mcf7_pred_sig, 
+                                           true_sigs = mcf7_true_sig,
+                                           splits=TRUE,
+                                           split_file = file.path(PROJECT_PATH, "data/sigs/sciplex/drug_splits.csv"),
+                                       split_pb_col = "drug",
+                                       split_type = "90th")
+  mcf7_a549_recon_eval_table <- sig_eval_table(source_sigs = mcf7_true_sig_up,
+                                           pred_sigs = a549_pred_sig, 
+                                           true_sigs = a549_true_sig,
+                                           splits=TRUE,
+                                           split_file = file.path(PROJECT_PATH, "data/sigs/sciplex/drug_splits.csv"),
+                                       split_pb_col = "drug",
+                                       split_type = "90th")
+  mcf7_k562_recon_eval_table <- sig_eval_table(source_sigs = mcf7_true_sig_up,
+                                           pred_sigs = k562_pred_sig, 
+                                           true_sigs = k562_true_sig,
+                                           splits=TRUE,
+                                           split_file = file.path(PROJECT_PATH, "data/sigs/sciplex/drug_splits.csv"),
+                                       split_pb_col = "drug",
+                                       split_type = "90th")
+  mcf7_k562_recon_eval_table$source <- "mcf7_k562"
+  a549_k562_recon_eval_table$source <- "a549_k562"
+  a549_mcf7_recon_eval_table$source <- "a549_mcf7"
+  k562_a549_recon_eval_table$source <- "k562_a549"
+  k562_mcf7_recon_eval_table$source <- "k562_mcf7"
+  mcf7_a549_recon_eval_table$source <- "mcf7_a549"
+  combined_df <- rbind(mcf7_k562_recon_eval_table,
+                       a549_k562_recon_eval_table,
+                       a549_mcf7_recon_eval_table,
+                       k562_a549_recon_eval_table,
+                       k562_mcf7_recon_eval_table,
+                       mcf7_a549_recon_eval_table)
+    saveRDS(combined_df, file.path(PROJECT_PATH, "results/eval/sciplex/ctrl_90th_mean_eval_table.rds"))
+} else {
+  combined_df <- readRDS(file.path(PROJECT_PATH, "results/eval/sciplex/ctrl_90th_mean_eval_table.rds"))
+}
+```
+
+```{r}
+combined_aggregated_df <- merge(combined_no_recon_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
+                                combined_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
+                                by = c("source", "gene"), 
+                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+```
+
+### Unpaired
+```{r}
+combined_df %>% 
+  group_by(source) %>%
+  summarize(NES = mean(NES, na.rm=TRUE),
+            jacc = mean(jacc))
+```
+
+```{r}
+combined_df %>% 
+  group_by(source) %>%
+  summarize(NES = mean(NES, na.rm = TRUE),
+            jacc = mean(jacc)) %>%
+  summarize(NES = mean(NES),
+            jacc = mean(jacc))
+```
+
+### Paired
+```{r}
+combined_aggregated_df %>% 
+  group_by(source) %>% 
+  summarize(Jacc_Wilcox_pval = wilcox.test(jacc_TRUE, jacc_FALSE, paired = TRUE, alternative="greater")$p.value,
+            KS_Wilcox_pval = wilcox.test(NES_TRUE, NES_FALSE, paired = TRUE, alternative="greater")$p.value)
+```
+
+```{r}
+combined_aggregated_df %>% 
+  group_by(source) %>% 
+  summarize(Jacc_Wilcox_pval = wilcox.test(jacc_TRUE, jacc_FALSE, paired = TRUE, alternative="greater")$p.value,
+            KS_Wilcox_pval = wilcox.test(NES_TRUE, NES_FALSE, paired = TRUE, alternative="greater")$p.value) %>%
+  summarize(KS_meta_p = fishers_meta_p(KS_Wilcox_pval),
+            Jacc_meta_p = fishers_meta_p(Jacc_Wilcox_pval))
+```
+
+## Plots {.tabset}
+
+### K562 to MCF7
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="k562_mcf7") %>%
+  ggplot(aes(x=NES_FALSE, y=NES_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("NES Scores in", "K562 Up"), 
+       x = "NES Score (Before)",
+       y = "NES Score (After)")
+```
+
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="k562_mcf7") %>%
+  ggplot(aes(x=jacc_FALSE, y=jacc_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("Jaccard Similarity in", "K562 Up"), 
+       x = "Jaccard (Before)",
+       y = "Jaccard (After)")
+```
+
+### K562 to A549
+
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="k562_a549") %>%
+  ggplot(aes(x=NES_FALSE, y=NES_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("NES Scores in", "K562 Up"), 
+       x = "NES Score (Before)",
+       y = "NES Score (After)")
+```
+
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="k562_a549") %>%
+  ggplot(aes(x=jacc_FALSE, y=jacc_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("Jaccard Similarity in", "K562 Up"), 
+       x = "Jaccard (Before)",
+       y = "Jaccard (After)")
+```
+
+
+

@@ -1,0 +1,287 @@
+---
+title: "GSVA Recontextualization Evaluation"
+author: "Andrew Chen"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: 'united'
+    toc: true
+    toc_depth: 1
+    toc_float: true
+    df_print: paged
+    code_folding: hide
+---
+
+```{r, echo = FALSE, message = FALSE}
+library(tidyverse)
+library(sigrecon)
+PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon")
+```
+
+# Loading Data
+```{r}
+# Loading Signatures and Networks
+drugmatrix.liver.sigs <- sigrecon::drugmatrix.liver
+drugmatrix.kidney.sigs <- sigrecon::drugmatrix.kidney
+liver_sig_full <- lapply(drugmatrix.liver.sigs, function(x) x$up_full)
+kidney_sig_full <- lapply(drugmatrix.kidney.sigs, function(x) x$up_full)
+liver_sig_up <- lapply(drugmatrix.liver.sigs, function(x) x$up)
+kidney_sig_up <- lapply(drugmatrix.kidney.sigs, function(x) x$up)
+liver_all_recon_sigs <- readRDS(file.path(PATH, "data/sigs/drugmatrix/recon/liver_gsva_all_recon.rds"))
+kidney_all_recon_sigs <- readRDS(file.path(PATH, "data/sigs/drugmatrix/recon/kidney_gsva_all_recon.rds"))
+liver_control_recon_sigs <- readRDS(file.path(PATH, "data/sigs/drugmatrix/recon/liver_gsva_control_recon.rds"))
+kidney_control_recon_sigs <- readRDS(file.path(PATH, "data/sigs/drugmatrix/recon/kidney_gsva_control_recon.rds"))
+liver_perturbed_recon_sigs <- readRDS(file.path(PATH, "data/sigs/drugmatrix/recon/liver_gsva_perturbed_recon.rds"))
+kidney_perturbed_recon_sigs <- readRDS(file.path(PATH, "data/sigs/drugmatrix/recon/kidney_gsva_perturbed_recon.rds"))
+```
+
+
+```{r}
+kidney_all_df <- sig_eval_table(source_sigs = kidney_sig_up, pred_sigs = kidney_all_recon_sigs, true_sigs = drugmatrix.liver.sigs, source="kidney_all")
+kidney_all_df$recon <- TRUE
+liver_all_df <- sig_eval_table(source_sigs = liver_sig_up, pred_sigs = liver_all_recon_sigs, true_sigs = drugmatrix.kidney.sigs, source="liver_all")
+liver_all_df$recon <- TRUE
+kidney_control_df <- sig_eval_table(source_sigs = kidney_sig_up, pred_sigs = kidney_control_recon_sigs, true_sigs = drugmatrix.liver.sigs, source="kidney_control")
+kidney_control_df$recon <- TRUE
+liver_control_df <- sig_eval_table(source_sigs = liver_sig_up, pred_sigs = liver_control_recon_sigs, true_sigs = drugmatrix.kidney.sigs, source="liver_control")
+liver_control_df$recon <- TRUE
+kidney_perturbed_df <- sig_eval_table(source_sigs = kidney_sig_up, pred_sigs = kidney_perturbed_recon_sigs, true_sigs = drugmatrix.liver.sigs, source="kidney_perturbed")
+kidney_perturbed_df$recon <- TRUE
+liver_perturbed_df <- sig_eval_table(source_sigs = liver_sig_up, pred_sigs = liver_perturbed_recon_sigs, true_sigs = drugmatrix.kidney.sigs, source="liver_perturbed")
+liver_perturbed_df$recon <- TRUE
+
+combined_recon_df <- rbind(kidney_all_df, liver_all_df, kidney_control_df, liver_control_df, kidney_perturbed_df, liver_perturbed_df)
+```
+
+
+```{r}
+kidney_df <- sig_eval_table(source_sigs = kidney_sig_up, pred_sigs = kidney_sig_up, true_sigs = drugmatrix.liver.sigs, source="kidney")
+kidney_df$recon <- FALSE
+kidney_df <- kidney_df[rep(seq_len(nrow(kidney_df)), each = 3), ]
+kidney_df$source <- rep(c("kidney_all", "kidney_control", "kidney_perturbed"), times=length(kidney_sig_up))
+liver_df <- sig_eval_table(source_sigs = liver_sig_up, pred_sigs = liver_sig_up, true_sigs = drugmatrix.kidney.sigs, source="liver")
+liver_df$recon <- FALSE
+liver_df <- kidney_df[rep(seq_len(nrow(liver_df)), each = 3), ]
+liver_df$source <- rep(c("liver_all", "liver_control", "liver_perturbed"), times=length(liver_sig_up))
+combined_no_recon_df <- rbind(kidney_df, liver_df)
+```
+
+
+```{r}
+combined_aggregated_df <- merge(combined_no_recon_df %>% dplyr::select("source", "gene", "k_d", "jacc"), 
+                                combined_recon_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
+                                by = c("source", "gene"), 
+                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df
+```
+
+# kidney {.tabset}
+
+## all {.tabset}
+
+### KS
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="kidney_all") %>%
+  ggplot(aes(x=k_d_FALSE, y=k_d_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("KS Distances in", "kidney Up"), 
+     x = "KS Distance (Before)",
+     y = "KS Distance (After)")
+```
+
+### Jaccard 
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="kidney_all") %>%
+  ggplot(aes(x=jacc_FALSE, y=jacc_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("Jaccard Similarity in", "kidney Up"), 
+     x = "Jaccard (Before)",
+     y = "Jaccard (After)")
+```
+
+## control {.tabset}
+
+### KS
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="kidney_control") %>%
+  ggplot(aes(x=k_d_FALSE, y=k_d_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("KS Distances in", "kidney Up"), 
+     x = "KS Distance (Before)",
+     y = "KS Distance (After)")
+```
+
+### Jaccard 
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="kidney_control") %>%
+  ggplot(aes(x=jacc_FALSE, y=jacc_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("Jaccard Similarity in", "kidney Up"), 
+     x = "Jaccard (Before)",
+     y = "Jaccard (After)")
+```
+
+## perturbed {.tabset}
+
+### KS
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="kidney_perturbed") %>%
+  ggplot(aes(x=k_d_FALSE, y=k_d_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("KS Distances in", "kidney Up"), 
+     x = "KS Distance (Before)",
+     y = "KS Distance (After)")
+```
+
+### Jaccard 
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="kidney_perturbed") %>%
+  ggplot(aes(x=jacc_FALSE, y=jacc_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("Jaccard Similarity in", "kidney Up"), 
+     x = "Jaccard (Before)",
+     y = "Jaccard (After)")
+```
+
+# liver {.tabset}
+
+## all {.tabset}
+
+### KS
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="liver_all") %>%
+  ggplot(aes(x=k_d_FALSE, y=k_d_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("KS Distances in", "liver Up"), 
+     x = "KS Distance (Before)",
+     y = "KS Distance (After)")
+```
+
+### Jaccard 
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="liver_all") %>%
+  ggplot(aes(x=jacc_FALSE, y=jacc_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("Jaccard Similarity in", "liver Up"), 
+     x = "Jaccard (Before)",
+     y = "Jaccard (After)")
+```
+
+## control {.tabset}
+
+### KS
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="liver_control") %>%
+  ggplot(aes(x=k_d_FALSE, y=k_d_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("KS Distances in", "liver Up"), 
+     x = "KS Distance (Before)",
+     y = "KS Distance (After)")
+```
+
+### Jaccard 
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="liver_control") %>%
+  ggplot(aes(x=jacc_FALSE, y=jacc_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("Jaccard Similarity in", "liver Up"), 
+     x = "Jaccard (Before)",
+     y = "Jaccard (After)")
+```
+
+## perturbed {.tabset}
+
+### KS
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="liver_perturbed") %>%
+  ggplot(aes(x=k_d_FALSE, y=k_d_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("KS Distances in", "liver Up"), 
+     x = "KS Distance (Before)",
+     y = "KS Distance (After)")
+```
+
+### Jaccard 
+```{r}
+combined_aggregated_df %>% 
+  filter(source=="liver_perturbed") %>%
+  ggplot(aes(x=jacc_FALSE, y=jacc_TRUE)) +
+  geom_point(aes(alpha=kept_alpha)) +
+  geom_abline(color="black") +
+  scale_alpha_continuous("Proportion of Source Kept") +
+  labs(title = paste("Jaccard Similarity in", "liver Up"), 
+     x = "Jaccard (Before)",
+     y = "Jaccard (After)")
+```
+
+# Unpaired
+```{r}
+combined_aggregated_df %>% 
+  dplyr::filter(str_detect(source, "control")) %>%
+  dplyr::group_by(source) %>%
+  dplyr::summarize(kd_mean = mean(k_d_TRUE),
+                   jacc_mean = mean(jacc_TRUE)) %>%
+  dplyr::summarize(kd_mean = mean(kd_mean),
+                   jacc_mean = mean(jacc_mean))
+```
+
+
+# Pairwise summary
+```{r}
+combined_aggregated_df %>% 
+  mutate(Recon_Succ_Ks = k_d_TRUE > k_d_FALSE + 1e-2,
+         Recon_Fail_Ks = k_d_TRUE < k_d_FALSE - 1e-2,
+         Recon_Succ_Jacc = jacc_TRUE > jacc_FALSE + 1e-2,
+         Recon_Fail_Jacc = jacc_TRUE < jacc_FALSE - 1e-2) %>% 
+  group_by(source) %>% 
+  summarize(Recon_Works_Jacc = sum(Recon_Succ_Jacc)/(sum(Recon_Succ_Jacc) + sum(Recon_Fail_Jacc)),
+            Recon_Works_KS = sum(Recon_Succ_Ks)/(sum(Recon_Succ_Ks) + sum(Recon_Fail_Ks)),
+            Jacc_Wilcox_pval = wilcox.test(jacc_TRUE, jacc_FALSE, paired = TRUE, alternative="greater")$p.value,
+            Jacc_t_pval = t.test(jacc_TRUE, jacc_FALSE, paired=TRUE, alternative="greater")$p.value,
+            KS_Wilcox_pval = wilcox.test(k_d_TRUE, k_d_FALSE, paired = TRUE, alternative="greater")$p.value,
+            KS_t_pval = t.test(k_d_TRUE, k_d_FALSE, paired=TRUE, alternative="greater")$p.value)
+```
+
+```{r}
+combined_aggregated_df %>% 
+  dplyr::filter(str_detect(source, "control")) %>%
+  group_by(source) %>% 
+  summarize(Jacc_Wilcox_pval = wilcox.test(jacc_TRUE, jacc_FALSE, paired = TRUE, alternative="greater")$p.value,
+            KS_Wilcox_pval = wilcox.test(k_d_TRUE, k_d_FALSE, paired = TRUE, alternative="greater")$p.value) %>%
+  summarize(KS_meta_p = fishers_meta_p(KS_Wilcox_pval),
+            Jacc_meta_p = fishers_meta_p(Jacc_Wilcox_pval))
+```
+

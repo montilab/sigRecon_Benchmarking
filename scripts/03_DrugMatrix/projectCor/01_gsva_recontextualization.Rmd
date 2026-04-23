@@ -1,0 +1,151 @@
+---
+title: "GSVA Recontextualization"
+author: "Andrew Chen"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: 'united'
+    toc: true
+    toc_depth: 1
+    toc_float: true
+    df_print: paged
+    code_folding: hide
+---
+
+```{r, echo=FALSE}
+library(tidyverse)
+library(Biobase)
+library(GSVA)
+library(evalGSVAsig)
+library(sigrecon)
+library(SingleCellExperiment)
+PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon")
+DATA_PATH <- file.path(Sys.getenv("CBM"), "otherStudies/RNAseq/drugmatrix")
+```
+# Loading Data
+```{r, echo=FALSE, message=FALSE}
+# Load signatures
+load(file.path(PATH, "sigrecon/data/drugmatrix.liver.rda"))
+load(file.path(PATH, "sigrecon/data/drugmatrix.kidney.rda"))
+drugmatrix.liver.sigs <- drugmatrix.liver
+drugmatrix.kidney.sigs <- drugmatrix.kidney
+
+kidney_sig_up <- lapply(drugmatrix.kidney.sigs, function(x) x$up)
+liver_sig_up <- lapply(drugmatrix.liver.sigs, function(x) x$up)
+
+# All data
+liver_elist <- readRDS(file=file.path(DATA_PATH, "liver.rds"))
+kidney_elist <- readRDS(file=file.path(DATA_PATH, "kidney.rds"))
+
+# Filtering Features
+liver_mad_genes <- sigrecon:::rank.var.eset(liver_elist)$values[1:7500]
+liver_mad_genes_df <- fData(liver_elist)[liver_mad_genes,] %>% dplyr::select("Gene Symbol") %>% filter(`Gene Symbol` != "") %>% rownames_to_column("gene_id")
+## Removing duplicate genes
+duplicated_filter <- duplicated(liver_mad_genes_df$`Gene Symbol`)
+liver_mad_genes_df <- liver_mad_genes_df[!duplicated_filter,]
+liver_mad_genes <- liver_mad_genes_df$gene_id
+liver_mad_gene_symbols <- liver_mad_genes_df$`Gene Symbol`
+kidney_mad_genes <- sigrecon:::rank.var.eset(kidney_elist)$values[1:7500]
+kidney_mad_genes_df <- fData(kidney_elist)[kidney_mad_genes,] %>% dplyr::select("Gene Symbol") %>% filter(`Gene Symbol` != "") %>% rownames_to_column("gene_id")
+duplicated_filter <- duplicated(kidney_mad_genes_df$`Gene Symbol`)
+kidney_mad_genes_df <- kidney_mad_genes_df[!duplicated_filter,]
+kidney_mad_genes <- kidney_mad_genes_df$gene_id
+kidney_mad_gene_symbols <- kidney_mad_genes_df$`Gene Symbol`
+## Subsetting Esets with non-duplicated MAD genes
+liver_all_eset <- liver_elist[liver_mad_genes,]
+kidney_all_eset <- kidney_elist[kidney_mad_genes,]
+featureNames(liver_all_eset) <- liver_mad_gene_symbols
+featureNames(kidney_all_eset) <- kidney_mad_gene_symbols
+
+# Control samples
+liver_control_samples <- liver_elist %>% pData %>% filter(`dose:ch1` == "0 mg/kg") %>% rownames
+kidney_control_samples <- kidney_elist %>% pData %>% filter(`dose:ch1` == "0 mg/kg") %>% rownames
+liver_eset <- liver_elist[,liver_control_samples]
+kidney_eset <- kidney_elist[,kidney_control_samples]
+
+# Filtering Features
+liver_mad_genes <- sigrecon:::rank.var.eset(liver_eset)$values[1:7500]
+liver_mad_genes_df <- fData(liver_eset)[liver_mad_genes,] %>% dplyr::select("Gene Symbol") %>% filter(`Gene Symbol` != "") %>% rownames_to_column("gene_id")
+## Removing duplicate genes
+duplicated_filter <- duplicated(liver_mad_genes_df$`Gene Symbol`)
+liver_mad_genes_df <- liver_mad_genes_df[!duplicated_filter,]
+liver_mad_genes <- liver_mad_genes_df$gene_id
+liver_mad_gene_symbols <- liver_mad_genes_df$`Gene Symbol`
+
+kidney_mad_genes <- sigrecon:::rank.var.eset(kidney_eset)$values[1:7500]
+kidney_mad_genes_df <- fData(kidney_eset)[kidney_mad_genes,] %>% dplyr::select("Gene Symbol") %>% filter(`Gene Symbol` != "") %>% rownames_to_column("gene_id")
+duplicated_filter <- duplicated(kidney_mad_genes_df$`Gene Symbol`)
+kidney_mad_genes_df <- kidney_mad_genes_df[!duplicated_filter,]
+kidney_mad_genes <- kidney_mad_genes_df$gene_id
+kidney_mad_gene_symbols <- kidney_mad_genes_df$`Gene Symbol`
+## Subsetting Esets with non-duplicated MAD genes
+liver_control_eset <- liver_eset[liver_mad_genes,]
+kidney_control_eset <- kidney_eset[kidney_mad_genes,]
+featureNames(liver_control_eset) <- liver_mad_gene_symbols
+featureNames(kidney_control_eset) <- kidney_mad_gene_symbols
+
+# Perturbed data
+liver_perturbed_samples <- liver_elist %>% pData %>% filter(`dose:ch1` != "0 mg/kg") %>% rownames
+kidney_perturbed_samples <- kidney_elist %>% pData %>% filter(`dose:ch1` != "0 mg/kg") %>% rownames
+liver_eset <- liver_elist[,liver_perturbed_samples]
+kidney_eset <- kidney_elist[,kidney_perturbed_samples]
+
+# Filtering Features
+liver_mad_genes <- sigrecon:::rank.var.eset(liver_eset)$values[1:7500]
+liver_mad_genes_df <- fData(liver_eset)[liver_mad_genes,] %>% dplyr::select("Gene Symbol") %>% filter(`Gene Symbol` != "") %>% rownames_to_column("gene_id")
+## Removing duplicate genes
+duplicated_filter <- duplicated(liver_mad_genes_df$`Gene Symbol`)
+liver_mad_genes_df <- liver_mad_genes_df[!duplicated_filter,]
+liver_mad_genes <- liver_mad_genes_df$gene_id
+liver_mad_gene_symbols <- liver_mad_genes_df$`Gene Symbol`
+
+kidney_mad_genes <- sigrecon:::rank.var.eset(kidney_eset)$values[1:7500]
+kidney_mad_genes_df <- fData(kidney_eset)[kidney_mad_genes,] %>% dplyr::select("Gene Symbol") %>% filter(`Gene Symbol` != "") %>% rownames_to_column("gene_id")
+duplicated_filter <- duplicated(kidney_mad_genes_df$`Gene Symbol`)
+kidney_mad_genes_df <- kidney_mad_genes_df[!duplicated_filter,]
+kidney_mad_genes <- kidney_mad_genes_df$gene_id
+kidney_mad_gene_symbols <- kidney_mad_genes_df$`Gene Symbol`
+## Subsetting Esets with non-duplicated MAD genes
+liver_perturbed_eset <- liver_eset[liver_mad_genes,]
+kidney_perturbed_eset <- kidney_eset[kidney_mad_genes,]
+featureNames(liver_perturbed_eset) <- liver_mad_gene_symbols
+featureNames(kidney_perturbed_eset) <- kidney_mad_gene_symbols
+
+liver_all_sce <- as(liver_all_eset, "SummarizedExperiment")
+liver_all_sce <- as(liver_all_sce, "SingleCellExperiment")
+kidney_all_sce <- as(kidney_all_eset, "SummarizedExperiment")
+kidney_all_sce <- as(kidney_all_sce, "SingleCellExperiment")
+liver_control_sce <- as(liver_control_eset, "SummarizedExperiment")
+liver_control_sce <- as(liver_control_sce, "SingleCellExperiment")
+kidney_control_sce <- as(kidney_control_eset, "SummarizedExperiment")
+kidney_control_sce <- as(kidney_control_sce, "SingleCellExperiment")
+liver_perturbed_sce <- as(liver_perturbed_eset, "SummarizedExperiment")
+liver_perturbed_sce <- as(liver_perturbed_sce, "SingleCellExperiment")
+kidney_perturbed_sce <- as(kidney_perturbed_eset, "SummarizedExperiment")
+kidney_perturbed_sce <- as(kidney_perturbed_sce, "SingleCellExperiment")
+
+kidney_all_sce@assays@data$counts <- kidney_all_sce@assays@data$exprs
+liver_all_sce@assays@data$counts <- liver_all_sce@assays@data$exprs
+kidney_control_sce@assays@data$counts <- kidney_control_sce@assays@data$exprs
+liver_control_sce@assays@data$counts <- liver_control_sce@assays@data$exprs
+kidney_perturbed_sce@assays@data$counts <- kidney_perturbed_sce@assays@data$exprs
+liver_perturbed_sce@assays@data$counts <- liver_perturbed_sce@assays@data$exprs
+```
+
+# GSVA
+```{r}
+liver_all_recon_sigs <- gsva_recon(kidney_all_sce, liver_sig_up)
+kidney_all_recon_sigs <- gsva_recon(liver_all_sce, kidney_sig_up)
+liver_control_recon_sigs <- gsva_recon(kidney_control_sce, liver_sig_up)
+kidney_control_recon_sigs <- gsva_recon(liver_control_sce, kidney_sig_up)
+liver_perturbed_recon_sigs <- gsva_recon(kidney_perturbed_sce, liver_sig_up)
+kidney_perturbed_recon_sigs <- gsva_recon(liver_perturbed_sce, kidney_sig_up)
+saveRDS(liver_all_recon_sigs, file.path(PATH, "data/sigs/drugmatrix/recon/liver_gsva_all_recon.rds"))
+saveRDS(kidney_all_recon_sigs, file.path(PATH, "data/sigs/drugmatrix/recon/kidney_gsva_all_recon.rds"))
+saveRDS(liver_control_recon_sigs, file.path(PATH, "data/sigs/drugmatrix/recon/liver_gsva_control_recon.rds"))
+saveRDS(kidney_control_recon_sigs, file.path(PATH, "data/sigs/drugmatrix/recon/kidney_gsva_control_recon.rds"))
+saveRDS(liver_perturbed_recon_sigs, file.path(PATH, "data/sigs/drugmatrix/recon/liver_gsva_perturbed_recon.rds"))
+saveRDS(kidney_perturbed_recon_sigs, file.path(PATH, "data/sigs/drugmatrix/recon/kidney_gsva_perturbed_recon.rds"))
+```
+
+

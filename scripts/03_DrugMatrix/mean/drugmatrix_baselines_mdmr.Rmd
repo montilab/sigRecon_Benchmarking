@@ -1,0 +1,309 @@
+---
+title: "DrugMatrix - Baselines"
+author: "Andrew Chen"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: 'united'
+    toc: true
+    toc_depth: 1
+    toc_float: true
+    df_print: paged
+    code_folding: hide
+---
+
+```{r, echo=FALSE, message=FALSE}
+library(tidyverse)
+library(sigrecon)
+library(SummarizedExperiment)
+library(Biobase)
+library(doParallel)
+PROJECT_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon/")
+DATAPATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon/data/sigs/drugmatrix")
+SCEPATH <- file.path(Sys.getenv("AGED"), "CBMrepositoryData/perturbational_data/drugmatrix/")
+do_save <- FALSE
+```
+
+```{r}
+#True Sig
+kidney_true_sig <- sigrecon::drugmatrix.kidney
+kidney_true_sig_up <- lapply(kidney_true_sig, function(x) x$up)
+liver_true_sig <- sigrecon::drugmatrix.liver
+liver_true_sig_up <- lapply(liver_true_sig, function(x) x$up)
+
+#Summarized Experiment
+liver_eset <- readRDS(file=file.path(SCEPATH, "liver.rds"))
+kidney_eset <- readRDS(file=file.path(SCEPATH, "kidney.rds"))
+liver_sce <- makeSummarizedExperimentFromExpressionSet(liver_eset)
+kidney_sce <- makeSummarizedExperimentFromExpressionSet(kidney_eset)
+```
+
+```{r}
+filter_sample_metadata <- function(eSet) {
+  eSet %>%
+    pData %>%
+    filter(`dose:ch1` != "0 mg/kg") %>%
+    select(title, source_name_ch1, `compound:ch1`,`dose:ch1`, `tissue:ch1`, `time:ch1`, `vehicle:ch1`) %>%
+    mutate(
+      new_dose = as.numeric(str_extract(`dose:ch1`, "\\d+")),
+      new_time = as.numeric(str_extract(`time:ch1`, "\\d+"))
+    ) %>%
+    rownames_to_column("sample_id") %>%
+    group_by(`compound:ch1`) %>%
+    filter(new_dose == max(new_dose, na.rm = TRUE)) %>% # Filter for max dose
+    filter(new_time == max(new_time, na.rm = TRUE)) %>% # Filter for max time
+    ungroup() # Ungroup after filtering
+}
+```
+
+# No Change
+
+```{r}
+liver_recon_eval_table <- sig_eval_table(source_sigs = liver_true_sig_up,
+                                         pred_sigs = liver_true_sig_up, 
+                                         true_sigs = kidney_true_sig)
+liver_recon_eval_table$source <- "liver"
+kidney_recon_eval_table <- sig_eval_table(source_sigs = kidney_true_sig_up,
+                                         pred_sigs = kidney_true_sig_up, 
+                                         true_sigs = liver_true_sig)
+kidney_recon_eval_table$source <- "kidney"
+```
+
+```{r}
+no_change_df <- rbind(liver_recon_eval_table, kidney_recon_eval_table)
+```
+
+```{r}
+no_change_df %>% 
+  dplyr::group_by(source) %>%
+  summarize(NES_mean = mean(NES, na.rm = TRUE),
+            jacc = mean(jacc, na.rm = TRUE))
+```
+
+```{r}
+no_change_df %>% 
+  dplyr::group_by(source) %>%
+  summarize(NES = mean(NES, na.rm = TRUE),
+            jacc = mean(jacc, na.rm = TRUE)) %>%
+  summarize(NES_mean = mean(NES, na.rm = TRUE),
+            jacc_mean = mean(jacc, na.rm = TRUE))
+```
+
+# Mean
+```{r}
+#Pred Sig
+liver_sig <- readRDS(file.path(DATAPATH, "mean/liver_sigs.rds"))
+kidney_sig <- readRDS(file.path(DATAPATH, "mean/kidney_sigs.rds"))
+kidney_pred_sig <- rep(list(kidney_sig[["up"]]), length(kidney_true_sig))
+names(kidney_pred_sig) <- names(kidney_true_sig)
+liver_pred_sig <- rep(list(liver_sig[["up"]]), length(liver_true_sig))
+names(liver_pred_sig) <- names(liver_true_sig)
+```
+
+```{r}
+liver_recon_eval_table <- sig_eval_table(source_sigs = lapply(liver_true_sig, function(x) x$up),
+                                         pred_sigs = kidney_pred_sig, 
+                                         true_sigs = kidney_true_sig)
+liver_recon_eval_table$source <- "liver"
+kidney_recon_eval_table <- sig_eval_table(source_sigs = lapply(kidney_true_sig, function(x) x$up),
+                                         pred_sigs = liver_pred_sig, 
+                                         true_sigs = liver_true_sig)
+kidney_recon_eval_table$source <- "kidney"
+
+change_df <- rbind(liver_recon_eval_table,
+                   kidney_recon_eval_table)
+```
+
+```{r}
+change_df %>% 
+  dplyr::group_by(source) %>%
+  summarize(NES_mean = mean(NES, na.rm = TRUE),
+            jacc = mean(jacc, na.rm = TRUE))
+```
+
+```{r}
+change_df %>% 
+  dplyr::group_by(source) %>%
+  summarize(NES = mean(NES, na.rm = TRUE),
+            jacc = mean(jacc, na.rm = TRUE)) %>%
+  summarize(NES_mean = mean(NES, na.rm = TRUE),
+            jacc_mean = mean(jacc, na.rm = TRUE))
+```
+
+# MDMR
+
+## max_dose filtering, binary phenotype
+```{r}
+# for each signature need to subset se to ctrl and max drug profiles, create a phenotype column label, 1/0 depending on whether it was perturbed 
+# 1. Drug-specific
+liver_samples <- filter_sample_metadata(liver_eset)
+kidney_samples <- filter_sample_metadata(kidney_eset)
+
+# Kidney->Liver
+kidney_liver_results <- foreach (drug=names(kidney_true_sig), .combine = dplyr::bind_rows) %do% {
+  drug_samples <- liver_samples %>% filter(`compound:ch1`== drug)
+  drug_vehicle <- drug_samples %>% pull(`vehicle:ch1`)
+  drug_time <- drug_samples %>% pull(`time:ch1`)
+  stopifnot(length(unique(drug_time)) == 1)
+  drug_vehicle <- unique(drug_vehicle)
+  drug_time <- unique(drug_time)
+  ctrl_samples <- liver_eset %>% pData %>% filter(`dose:ch1` == "0 mg/kg",
+                                                  `vehicle:ch1` == drug_vehicle,
+                                                  `time:ch1` == drug_time)
+  ctrl_ids <- ctrl_samples %>% rownames
+  drug_ids <- drug_samples %>% pull(sample_id)
+  
+  liver_se_sub <- liver_sce[,c(ctrl_ids, drug_ids)]
+  rownames(liver_se_sub) <- rowData(liver_se_sub)$`Gene.Symbol`
+  liver_se_sub$perturbed <- with(liver_se_sub@colData, if_else(`dose.ch1` == "0 mg/kg", true = 0, false = 1))
+  
+  nochange_sig <- kidney_true_sig_up[[drug]]
+  mean_sig <- kidney_sig$up
+  
+  nochange_res <- mdmr_eval(nochange_sig, liver_se_sub, phenotype_label = "perturbed", assay_label = "exprs")
+  mean_res <- mdmr_eval(mean_sig, liver_se_sub, phenotype_label = "perturbed", assay_label = "exprs")
+  
+  data.frame(source = "kidney",
+             target = "liver",
+             drug = drug,
+             method = c("nochange", "mean"),
+             stat = c(nochange_res$stat, mean_res$stat),
+             r2 = c(nochange_res$r2, mean_res$r2))
+}
+kidney_liver_results %>% drop_na
+```
+
+```{r}
+# Liver kidney results
+liver_kidney_results <- foreach (drug=names(liver_true_sig), .combine = dplyr::bind_rows) %do% {
+  drug_samples <- kidney_samples %>% filter(`compound:ch1`== drug)
+  drug_vehicle <- drug_samples %>% pull(`vehicle:ch1`)
+  drug_time <- drug_samples %>% pull(`time:ch1`)
+  stopifnot(length(unique(drug_time)) == 1)
+  drug_vehicle <- unique(drug_vehicle)
+  drug_time <- unique(drug_time)
+  ctrl_samples <- kidney_eset %>% pData %>% filter(`dose:ch1` == "0 mg/kg",
+                                                  `vehicle:ch1` == drug_vehicle,
+                                                  `time:ch1` == drug_time)
+  ctrl_ids <- ctrl_samples %>% rownames
+  drug_ids <- drug_samples %>% pull(sample_id)
+  
+  kidney_se_sub <- kidney_sce[,c(ctrl_ids, drug_ids)]
+  rownames(kidney_se_sub) <- rowData(kidney_se_sub)$`Gene.Symbol`
+  kidney_se_sub$perturbed <- with(kidney_se_sub@colData, if_else(`dose.ch1` == "0 mg/kg", true = 0, false = 1))
+  
+  nochange_sig <- liver_true_sig[[drug]]
+  mean_sig <- liver_sig$up
+  
+  nochange_res <- mdmr_eval(nochange_sig, kidney_se_sub, phenotype_label = "perturbed", assay_label = "exprs")
+  mean_res <- mdmr_eval(mean_sig, kidney_se_sub, phenotype_label = "perturbed", assay_label = "exprs")
+  
+  data.frame(source = "liver",
+             target = "kidney",
+             drug = drug,
+             method = c("nochange", "mean"),
+             stat = c(nochange_res$stat, mean_res$stat),
+             r2 = c(nochange_res$r2, mean_res$r2))
+}
+liver_kidney_results %>% drop_na
+```
+
+## no filtering, dose as phenotype
+```{r}
+# for each signature need to subset se to ctrl and max drug profiles, create a phenotype column label, 1/0 depending on whether it was perturbed 
+# 1. Drug-specific
+liver_samples <- filter_sample_metadata(liver_eset)
+kidney_samples <- filter_sample_metadata(kidney_eset)
+
+if(do_save) {
+  # Kidney->Liver
+  kidney_liver_results <- foreach (drug=names(kidney_true_sig), .combine = dplyr::bind_rows) %do% {
+  drug_samples <- liver_eset %>% pData %>% filter(`compound:ch1`== drug)
+  drug_doses <- drug_samples$`dose:ch1`
+  if(length(unique(drug_doses)) < 2) {
+    return(NULL)
+  } 
+  drug_vehicle <- drug_samples %>% pull(`vehicle:ch1`)
+  drug_vehicle <- unique(drug_vehicle)
+  drug_time <- unique(drug_time)
+  ctrl_samples <- liver_eset %>% pData %>% filter(`dose:ch1` == "0 mg/kg",
+                                                  `vehicle:ch1` == drug_vehicle)
+  ctrl_ids <- ctrl_samples %>% rownames
+  drug_ids <- drug_samples %>% rownames
+  
+  liver_se_sub <- liver_sce[,c(ctrl_ids, drug_ids)]
+  rownames(liver_se_sub) <- rowData(liver_se_sub)$`Gene.Symbol`
+  liver_se_sub$perturbed <- as.numeric(str_remove_all(liver_se_sub$dose.ch1, " mg/kg"))
+  
+  nochange_sig <- kidney_true_sig_up[[drug]]
+  mean_sig <- kidney_sig$up
+  
+  nochange_res <- mdmr_eval(nochange_sig, liver_se_sub, phenotype_label = "perturbed", assay_label = "exprs")
+  mean_res <- mdmr_eval(mean_sig, liver_se_sub, phenotype_label = "perturbed", assay_label = "exprs")
+  
+  data.frame(source = "kidney",
+             target = "liver",
+             drug = drug,
+             method = c("nochange", "mean"),
+             stat = c(nochange_res$stat, mean_res$stat),
+             r2 = c(nochange_res$r2, mean_res$r2))
+  }
+  saveRDS(kidney_liver_results, file.path(PROJECT_PATH, "data/eval/drugmatrix/kidney_liver_mdmr_baselines.rds"))
+} else {
+  kidney_liver_results <- readRDS(file.path(PROJECT_PATH, "data/eval/drugmatrix/kidney_liver_mdmr_baselines.rds"))
+}
+kidney_liver_results %>% drop_na
+```
+
+```{r}
+# Liver kidney results
+liver_kidney_results <- foreach (drug=names(liver_true_sig), .combine = dplyr::bind_rows) %do% {
+  drug_samples <- kidney_samples %>% filter(`compound:ch1`== drug)
+  drug_vehicle <- drug_samples %>% pull(`vehicle:ch1`)
+  drug_time <- drug_samples %>% pull(`time:ch1`)
+  stopifnot(length(unique(drug_time)) == 1)
+  drug_vehicle <- unique(drug_vehicle)
+  drug_time <- unique(drug_time)
+  ctrl_samples <- kidney_eset %>% pData %>% filter(`dose:ch1` == "0 mg/kg",
+                                                  `vehicle:ch1` == drug_vehicle,
+                                                  `time:ch1` == drug_time)
+  ctrl_ids <- ctrl_samples %>% rownames
+  drug_ids <- drug_samples %>% pull(sample_id)
+  
+  kidney_se_sub <- kidney_sce[,c(ctrl_ids, drug_ids)]
+  rownames(kidney_se_sub) <- rowData(kidney_se_sub)$`Gene.Symbol`
+  kidney_se_sub$perturbed <- with(kidney_se_sub@colData, if_else(`dose.ch1` == "0 mg/kg", true = 0, false = 1))
+  
+  nochange_sig <- liver_true_sig[[drug]]
+  mean_sig <- liver_sig$up
+  
+  nochange_res <- mdmr_eval(nochange_sig, kidney_se_sub, phenotype_label = "perturbed", assay_label = "exprs")
+  mean_res <- mdmr_eval(mean_sig, kidney_se_sub, phenotype_label = "perturbed", assay_label = "exprs")
+  
+  data.frame(source = "liver",
+             target = "kidney",
+             drug = drug,
+             method = c("nochange", "mean"),
+             stat = c(nochange_res$stat, mean_res$stat),
+             r2 = c(nochange_res$r2, mean_res$r2))
+}
+liver_kidney_results %>% drop_na
+```
+
+# Paired
+```{r}
+combined_aggregated_df <- merge(no_change_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
+                                change_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
+                                by = c("source", "gene"), 
+                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+```
+
+```{r}
+combined_aggregated_df %>% 
+  group_by(source) %>% 
+  summarize(Jacc_Wilcox_pval = wilcox.test(jacc_TRUE, jacc_FALSE, paired = TRUE, alternative="greater")$p.value,
+            NES_Wilcox_pval = wilcox.test(NES_TRUE, NES_FALSE, paired = TRUE, alternative="greater")$p.value) %>%
+  summarize(NES_meta_p = fishers_meta_p(NES_Wilcox_pval),
+            Jacc_meta_p = fishers_meta_p(Jacc_Wilcox_pval))
+```
+

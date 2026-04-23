@@ -1,0 +1,233 @@
+---
+title: "GTEX Recontextualization Evaluation"
+author: "Andrew Chen"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: united
+    toc: true
+    toc_depth: 1
+    toc_float: true
+    df_print: paged
+    code_folding: hide
+  pdf_document:
+    toc: true
+    toc_depth: '1'
+---
+
+# Loading Data
+```{r}
+library(tidyverse)
+theme_set(theme_gray(base_size = 14))
+
+PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon")
+```
+
+
+```{r}
+no_recon_df <- readRDS(file.path(PATH, "data/eval/gtex/no_recon_wgcna_power.rds"))
+recon_df <- readRDS(file.path(PATH, "data/eval/gtex/recon_wgcna_power_bootstrap.rds"))
+recon_avg_df <- readRDS(file.path(PATH, "data/eval/gtex/recon_avg_p_wgcna_power_bootstrap.rds"))
+recon_avg_df$rw_p <- 0
+combined_df <- dplyr::bind_rows(list(no_recon_df, recon_df, recon_avg_df))
+n_genes <- unique(combined_df$gene) %>% length 
+```
+
+# Evaluation - Summary Tables
+
+For each gene, the jaccard similarity of the recontextualized signature was evaluated against the true invivo signature, and a ks-test was conducted between the recontextualized signature (top 30) and the true invivo signature (all ranks). We will average jaccard similarities and ks-test statistics across splits first.
+
+## Recontextualized Genes {.tabset}
+
+```{r}
+aggregated_recon_df <- combined_df %>% 
+                    filter(rw_p != -1) %>%
+                    filter(gene != "non-targeting") 
+
+aggregated_recon_df %>% head
+```
+
+### KS Test filter (0.5, 5e-2)
+
+```{r}
+aggregated_recon_df %>%
+  filter(k_p < 5e-2 & k_d > 0.5) %>%
+  group_by(source, rw_p) %>% 
+  summarize(n = n(), prop = n/n_genes)
+```
+
+### Jaccard Similarity 
+
+```{r}
+aggregated_recon_df %>%
+  filter(jacc > 0.1) %>%
+  group_by(source, rw_p) %>%
+  summarize(n = n(), prop = n/n_genes)
+```
+
+
+## No Recontextualization {.tabset}
+
+```{r}
+aggregated_no_recon_df <- combined_df %>% 
+                    filter(rw_p == -1) %>%
+                    filter(gene != "non-targeting")
+aggregated_no_recon_df %>% head
+```
+
+### KS Test filter (0.5, 5e-2)
+
+```{r}
+aggregated_no_recon_df %>%
+  filter(k_p < 5e-2 & k_d > 0.5) %>%
+  group_by(source) %>% 
+  summarize(n = n(), prop = n/n_genes)
+```
+
+### Jaccard Similarity 
+
+```{r}
+aggregated_no_recon_df %>%
+  filter(jacc > 0.1) %>%
+  group_by(source) %>% 
+  summarize(n = n(), prop = n/n_genes)
+```
+
+# Pairwise KS Comparisons {.tabset}
+
+```{r}
+combined_aggregated_df <- merge(aggregated_no_recon_df %>% dplyr::select("source", "gene", "k_d", "jacc"), 
+                                aggregated_recon_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
+                                by = c("source", "gene"), 
+                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df$rw_p <- round(combined_aggregated_df$rw_p, 4)
+```
+
+## Fixed restart value
+
+```{r}
+combined_aggregated_df %>% 
+              filter(rw_p == 1 | rw_p == 1e-4) %>% 
+              ggplot(aes(x=k_d_FALSE, y=k_d_TRUE, color=factor(rw_p))) +
+              geom_point(aes(alpha=kept_alpha)) +
+              geom_abline(color="black") +
+              scale_color_discrete("Restart Value") + 
+              theme(aspect.ratio=1) +
+              scale_alpha_continuous("Proportion of Source Kept") +
+              labs(title = "KS Distances for recontextualized blood aging signatures", 
+                 x = "KS Distance (Before)",
+                 y = "KS Distance (After)") + 
+              coord_fixed(ratio = 1) +
+              xlim(-1,1) +ylim(-1,1)
+```
+
+##  Avg restart values
+```{r}
+combined_aggregated_df %>% 
+              filter(rw_p == 1 | rw_p == 0) %>% 
+              ggplot(aes(x=k_d_FALSE, y=k_d_TRUE, color=factor(rw_p))) +
+              geom_point(aes(alpha=kept_alpha)) +
+              geom_abline(color="black") +
+              scale_color_discrete("Restart Value") + 
+              theme(aspect.ratio=1) +
+              scale_alpha_continuous("Proportion of Source Kept") +
+              labs(title = "KS Distances for recontextualized blood aging signatures", 
+                 x = "KS Distance (Before)",
+                 y = "KS Distance (After)") + 
+              coord_fixed(ratio = 1) +
+              xlim(-1,1) +ylim(-1,1)
+```
+
+##  max
+```{r}
+combined_aggregated_df %>% 
+  group_by(source, gene) %>% 
+  mutate(k_d_diff = k_d_TRUE - k_d_FALSE) %>% 
+  filter(k_d_diff == max(k_d_diff)) %>% 
+  filter(rw_p != 1) %>% 
+  ggplot(aes(x=k_d_FALSE, y=k_d_TRUE, color=factor(rw_p))) +
+    geom_point(aes(alpha=kept_alpha)) +
+    geom_abline(color="black") + 
+    scale_color_discrete("Restart Value") + theme(aspect.ratio=1) + 
+    scale_alpha_continuous("Proportion of Source Kept") + 
+    coord_fixed(ratio = 1, xlim = c(0,1), ylim = c(0,1)) +
+    labs(title = "KS Distances for recontextualized blood aging signatures", 
+         x = "KS Distance (Before)",
+         y = "KS Distance (After)") + 
+              coord_fixed(ratio = 1) +
+              xlim(-1,1) +ylim(-1,1)
+```
+
+
+# Pairwise Jaccard Comparison {.tabset}
+
+##  Fixed restart values
+```{r}
+combined_aggregated_df %>% 
+              filter(rw_p == 1 | rw_p == 0.1) %>% 
+              ggplot(aes(x=jacc_FALSE, y=jacc_TRUE, color=factor(rw_p))) +
+              geom_point(aes(alpha=kept_alpha)) +
+              geom_abline(color="black") +
+              scale_color_discrete("Restart Value") + 
+              theme(aspect.ratio=1) +
+              scale_alpha_continuous("Proportion of Source Kept") +
+              labs(title = "Jacc Sim. for recontextualized blood aging signatures", 
+                 x = "Jac Sim (Before)",
+                 y = "Jac Sim (After)") + 
+              coord_fixed(ratio = 1) +
+              xlim(-1,1) +ylim(-1,1)
+```
+
+##  Avg restart values
+```{r}
+combined_aggregated_df %>% 
+              filter(rw_p == 1 | rw_p == 0) %>% 
+              ggplot(aes(x=jacc_FALSE, y=jacc_TRUE, color=factor(rw_p))) +
+              geom_point(aes(alpha=kept_alpha)) +
+              geom_abline(color="black") +
+              scale_color_discrete("Restart Value") + 
+              theme(aspect.ratio=1) +
+              scale_alpha_continuous("Proportion of Source Kept") +
+              labs(title = "KS Distances for recontextualized blood aging signatures", 
+                 x = "Jac Sim (Before)",
+                 y = "Jac Sim (After)") + 
+              coord_fixed(ratio = 1) +
+              xlim(-1,1) +ylim(-1,1)
+```
+
+###  max
+```{r}
+combined_aggregated_df %>% 
+  group_by(source, gene) %>% 
+  mutate(jacc_diff = jacc_TRUE - jacc_FALSE) %>% 
+  filter(jacc_diff == max(jacc_diff)) %>% 
+  filter(rw_p != 1) %>% 
+  ggplot(aes(x=jacc_FALSE, y=jacc_TRUE, color=factor(rw_p))) +
+    geom_point(aes(alpha=kept_alpha)) +
+    geom_abline(color="black") + 
+    scale_color_discrete("Restart Value") + theme(aspect.ratio=1) + 
+    scale_alpha_continuous("Proportion of Source Kept") + 
+    coord_fixed(ratio = 1, xlim = c(0,1), ylim = c(0,1)) +
+    labs(title = "KS Distances for recontextualized blood aging signatures", 
+         x = "Jac Sim (Before)",
+         y = "Jac Sim (After)") + 
+              coord_fixed(ratio = 1) +
+              xlim(-1,1) +ylim(-1,1)
+```
+
+# Pairwise Summary
+```{r}
+metrics_df <- combined_aggregated_df %>% 
+  mutate(Recon_Succ_Ks = k_d_TRUE > k_d_FALSE + 1e-2,
+         Recon_Fail_Ks = k_d_TRUE < k_d_FALSE - 1e-2,
+         Recon_Succ_Jacc = jacc_TRUE > jacc_FALSE + 1e-2,
+         Recon_Fail_Jacc = jacc_TRUE < jacc_FALSE - 1e-2) %>% 
+  summarize(Recon_Works_Jacc = sum(Recon_Succ_Jacc)/(sum(Recon_Succ_Jacc) + sum(Recon_Fail_Jacc)),
+            Recon_Works_KS = sum(Recon_Succ_Ks)/(sum(Recon_Succ_Ks) + sum(Recon_Fail_Ks)),
+            Jacc_Wilcox_pval = wilcox.test(jacc_TRUE, jacc_FALSE, paired = TRUE, alternative="greater")$p.value,
+            Jacc_t_pval = t.test(jacc_TRUE, jacc_FALSE, paired=TRUE, alternative="greater")$p.value,
+            KS_Wilcox_pval = wilcox.test(k_d_TRUE, k_d_FALSE, paired = TRUE, alternative="greater")$p.value,
+            KS_t_pval = t.test(k_d_TRUE, k_d_FALSE, paired=TRUE, alternative="greater")$p.value)
+metrics_df
+```
+

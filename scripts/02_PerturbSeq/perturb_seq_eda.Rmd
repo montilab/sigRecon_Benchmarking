@@ -1,0 +1,198 @@
+---
+title: "Perturb Seq 2022"
+author: "Andrew Chen"
+date: '2022-11-29'
+output:
+  html_document:
+    theme: 'united'
+    toc: true
+    toc_depth: 1
+    toc_float: true
+    df_print: paged
+    code_folding: hide
+---
+
+# Loading Data
+```{r setup, include=FALSE}
+library(tidyverse)
+library(anndata)
+#anndata::install_anndata()
+
+PATH <- file.path(Sys.getenv("CBM"), "perturb-seq")
+
+rpe1_essential_normalized_bulk_path <- file.path(PATH, "rpe1_normalized_bulk_01.h5ad")
+rpe1_essential_normalized_bulk_data <- anndata::read_h5ad(rpe1_essential_normalized_bulk_path)
+
+k562_essential_normalized_bulk_path <- file.path(PATH, "K562_essential_normalized_bulk_01.h5ad")
+k562_essential_normalized_sc_path <- file.path(PATH, "K562_essential_normalized_singlecell_01.h5ad")
+k562_all_normalized_bulk_path <- file.path(PATH, "K562_gwps_normalized_bulk_01.h5ad")
+
+k562_essential_normalized_bulk_data <- read_h5ad(k562_essential_normalized_bulk_path)
+k562_essential_normalized_sc_data <- read_h5ad(k562_essential_normalized_sc_path)
+k562_all_normalized_bulk_data <- read_h5ad(k562_all_normalized_bulk_path)
+```
+
+
+# Basic EDA
+
+```{r}
+k562_essential_normalized_bulk_data$X[1:5, 1:5]
+```
+
+```{r}
+dim(k562_essential_normalized_bulk_data)
+```
+
+> 2285 perturbations (all common essential genes), and the effect on expression for 8563 genes. In Ann Data, samples are row, and features (gene expression) are columns. Information about the features is contained in obj$var, and information about the sample are contained in obj$obs
+
+```{r}
+k562_all_normalized_bulk_data %>% dim
+```
+
+> Genome wide screen has 11,258 perturbations, for fewer genes.
+
+```{r}
+k562_essential_normalized_bulk_data$obs$UMI_count_unfiltered %>% median(na.rm=TRUE)
+```
+
+> Median > 10,000 UMIs per cell.
+
+```{r}
+k562_essential_normalized_bulk_data$obs$num_cells_filtered %>% median(na.rm=TRUE)
+```
+
+> Median > 116 cells per perturbation
+
+# TP53 Perturbation
+```{r}
+tp53_filter_bulk <- k562_essential_normalized_bulk_data$obs %>% rownames %>% grepl("TP53", x=., fixed=TRUE)
+k562_tp53_bulk <- k562_essential_normalized_bulk_data[tp53_filter_bulk,]$X
+k562_tp53_bulk[1,1:5]
+```
+
+```{r}
+rownames(k562_tp53_bulk)
+```
+
+```{r}
+tp53_filter_gwps <- k562_all_normalized_bulk_data$obs %>% rownames %>% grepl("TP53", x=., fixed=TRUE)
+k562_tp53_gwps <- k562_all_normalized_bulk_data[tp53_filter_gwps,]$X
+k562_tp53_gwps[, 1:5]
+```
+
+> Raw values are different, compare row 6 values. Genome wide screen was a seperate experiment done on day 8, the essential gene screen was another experiment done on day 6.
+
+
+```{r}
+k562_controls_filter <- k562_essential_normalized_bulk_data$obs %>% rownames %>% grepl("non-targeting", x=., fixed=TRUE)
+k562_essential_normalized_bulk_data[k562_controls_filter,1:5]$X %>% head
+```
+Is TP53 suppressed?
+```{r}
+k562_tp53_bulk[,"ENSG00000172315"]
+```
+
+```{r}
+k562_essential_normalized_bulk_data[k562_controls_filter,"ENSG00000172315"]$X %>% hist(main= "Histogram of TP53 Expression")
+abline(v = k562_tp53_bulk[,"ENSG00000172315"], col="red", lwd=3, lty=2)
+```
+
+> TP53 is suprressed
+
+
+```{r}
+#' Fetch the genes that are over/under expressed as a result of a perturbation in Perturb Seq experiments
+#' 
+#' @param ann_data ann_data R object
+#' @param gene hgnc gene symbol
+#' @param cutoff ordinal number, or fraction if you want the top 5%. If NULL, no cutoff is applied
+#' 
+#' @export
+perturb_seq_sig <- function(ann_data, gene, cutoff=NULL) {
+  
+  gene_filter <- ann_data$obs %>% rownames %>% grepl(gene, x=., fixed=TRUE)
+  controls_filter <- ann_data$obs %>% rownames %>% grepl("non-targeting", x=., fixed=TRUE)
+  
+  gene_exp <- ann_data[gene_filter,]$X
+  
+  if(nrow(gene_exp) > 1) {
+    # Find average expression of target gene
+    gene_exp <- apply(gene_exp, MARGIN = 2, FUN = mean)
+  } else {
+    # Or if there's only one row
+    gene_exp <- gene_exp[1,]
+  }
+  
+  control_mean <- apply(ann_data[controls_filter,]$X, MARGIN = 2, FUN = mean) 
+  control_sd <- apply(ann_data[controls_filter,]$X, MARGIN = 2, FUN = sd) 
+
+  # Perhaps can use a p-value based cutoff instead of top n
+  diff <- (gene_exp - control_mean)/control_sd
+  
+  if (is.null(cutoff)) {
+    n_cut <- length(diff)
+  } else if (cutoff < 1) {
+    n_cut <- round(cutoff * ann_data$n_vars)
+  } else {
+    n_cut <- cutoff 
+  }
+
+  diff_up <- diff[order(diff, decreasing=TRUE)[1:n_cut]]
+  diff_down <- diff[order(diff, decreasing=FALSE)[1:n_cut]]
+  
+  up_symbol <- as.character(ann_data$var[names(diff_up), "gene_name"])
+  down_symbol <- as.character(ann_data$var[names(diff_down), "gene_name"])
+  
+  return(list(up = up_symbol, down = down_symbol))
+}
+```
+
+```{r}
+library(vennr)
+tp53_gwps <- perturb_seq_sig(k562_all_normalized_bulk_data, "TP53", 0.01)
+tp53_essential <- perturb_seq_sig(k562_essential_normalized_bulk_data, "TP53")
+names(tp53_gwps) <- c("gwps_up", "gwps_down")
+vennr(c(tp53_gwps, tp53_essential))
+```
+
+> Genome wide screen produces signatures that don't overlap too much with the bulk. 
+
+```{r}
+tp53_rpe1_essential <- perturb_seq_sig(rpe1_essential_normalized_bulk_data, "TP53", 0.01)
+vennr(list(k562_up = tp53_essential$up, k562_down = tp53_essential$down, rpe1_up = tp53_rpe1_essential$up, rpe1_down = tp53_rpe1_essential$down))
+```
+
+> TP53 crispri knockdown produces different signatures in the two cell lines. 
+
+
+# K562 SC Data
+```{r}
+k562_essential_normalized_sc_data$obs
+```
+
+```{r}
+k562_essential_normalized_sc_data$obs$gene %>% table %>% sort(decreasing=TRUE) %>% head
+```
+
+> Most frequent sgRNA gene targets
+
+```{r}
+k562_essential_normalized_sc_data$obs$gene %>% table %>% quantile
+```
+
+
+> For the K562 single cell data. Each row is a single cell. Each cell seems to have been perturbed w/r to one gene. The perturbation of each gene has many replicates, often > 100. 
+
+```{r}
+sc_tp53_filter <- grepl("TP53", x=k562_essential_normalized_sc_data$obs$gene, fixed=TRUE)
+sc_tp53_data <- k562_essential_normalized_sc_data[sc_tp53_filter,]$X
+
+sc_tp53_data_mean <- apply(sc_tp53_data, 2, mean)
+
+all.equal.numeric(sc_tp53_data_mean,k562_tp53_bulk[1,])
+```
+
+> Bulk is just a mean of the single cell.
+
+
+
