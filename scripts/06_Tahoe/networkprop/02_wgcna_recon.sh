@@ -1,9 +1,9 @@
 #!/bin/bash -l
-#$ -l h_rt=24:00:00
+#$ -l h_rt=96:00:00
 #$ -N tahoe_wgcna_recon
 #$ -m e
 #$ -j y
-#$ -P lcproject
+#$ -P apoe-signatures
 #$ -pe omp 28
 
 cd /rprojectnb2/montilab-p/projects/brcameta/projects/sig_recon/scripts/06_Tahoe/network_prop

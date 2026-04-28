@@ -1,13 +1,13 @@
 #!/bin/bash -l
-#$ -l h_rt=24:00:00
+#$ -l h_rt=12:00:00
 #$ -N stack_k562_10th
 #$ -m e
 #$ -j y
 #$ -l gpus=1
 #$ -l gpu_c=8.0
-#$ -P lcproject
+#$ -P el-studies
 #$ -pe omp 16
-#$ -t 1-10
+#$ -t 6-10
 
 cd /restricted/projectnb/brcameta/projects/sig_recon/
 mamba activate stack
@@ -28,6 +28,10 @@ SPLIT_COL="split_${SPLIT_NUM}"
 echo "Processing ${SPLIT_NAME} (column: ${SPLIT_COL})"
 echo "Base adata: ${SPLIT_FILE}"
 
+# Output directory
+OUTPUT_DIR="/restricted/projectnb/agedisease/CBMrepositoryData/perturbational_data/replogle_2022/stack_pred/${SPLIT_NAME}"
+mkdir -p "${OUTPUT_DIR}"
+
 # Extract FALSE genes for this split into array
 mapfile -t GENES_ARRAY < <(awk -F'[,\t]' -v col="${SPLIT_COL}" '
     NR==1 {
@@ -39,18 +43,37 @@ mapfile -t GENES_ARRAY < <(awk -F'[,\t]' -v col="${SPLIT_COL}" '
     }
     {
         gsub(/"/, "", $col_idx)
-        if(tolower($col_idx) ~ /^(false|False|FALSE|1)$/) {
+        if(tolower($col_idx) ~ /^(false|False|FALSE)$/) {
             gsub(/"/, "", $1)
             print $1
         }
     }
 ' "${SPLITS_CSV}")
 
-echo "Found ${#GENES_ARRAY[@]} genes for ${SPLIT_COL}"
+# Append control perturbation
+GENES_ARRAY+=("non-targeting")
+
+# ------------------------------------------------
+# Remove genes already processed
+# ------------------------------------------------
+
+FILTERED_GENES=()
+
+for gene in "${GENES_ARRAY[@]}"; do
+    if ! ls "${OUTPUT_DIR}"/*"${gene}"* >/dev/null 2>&1; then
+        FILTERED_GENES+=("$gene")
+    else
+        echo "Skipping ${gene} (already exists)"
+    fi
+done
+
+GENES_ARRAY=("${FILTERED_GENES[@]}")
+
+echo "Remaining genes to process: ${#GENES_ARRAY[@]}"
 
 if [ ${#GENES_ARRAY[@]} -eq 0 ]; then
-    echo "ERROR: No genes found for ${SPLIT_COL}"
-    exit 1
+    echo "Nothing left to process for ${SPLIT_NAME}"
+    exit 0
 fi
 
 echo "First 5 genes: ${GENES_ARRAY[*]:0:5}"
@@ -64,7 +87,7 @@ stack-generation --checkpoint "scripts/stack/notebooks/tutorial-pred-model/bc_la
 --split-values "${GENES_ARRAY[@]}" \
 --batch-size 16 \
 --num-steps 5 \
---output-dir "/restricted/projectnb/agedisease/CBMrepositoryData/perturbational_data/replogle_2022/stack_pred/${SPLIT_NAME}" \
+--output-dir "${OUTPUT_DIR}" \
 --prompt-ratio 0.25 \
 --context-ratio 0.4
 

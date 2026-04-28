@@ -45,41 +45,49 @@ drug_splits <- read.csv(file.path(PATH, "data/sigs/tahoe/drug_splits.csv"))
 # 
 # print("Done with Control Benchmarking.")
 
-# ---------------------------
-# 1/10th Benchmarking
-# ---------------------------
-
-ig_paths <- Sys.glob(file.path(PATH, "data/wgcna_networks/tahoe/*control_1_10th*.rds"))
-ig_paths <- ig_paths[-c(51:60)]
-
-cell_lines <- sub("_control_1_10th_split_.*", "", basename(ig_paths))
-split_nums <- sub(".*_split_(\\d+)_wgcna\\.rds$", "\\1", basename(ig_paths))
-
-ig_df <- data.frame(
-  path = ig_paths,
-  cell_line = cell_lines,
-  split = split_nums,
-  stringsAsFactors = FALSE
-)
-
-results <- foreach(cl = unique(ig_df$cell_line)) %:%
-  foreach(i = 1:10, .combine = 'c') %dopar% {
+# 2. Split benchmarking
+run_benchmark <- function(pattern, split_keep, outfile){
+  
+  ig_paths <- Sys.glob(file.path(PATH, pattern))
+  ig_paths <- ig_paths[-c(51:60)]
+  
+  cell_lines <- sub("_control_.*", "", basename(ig_paths))
+  split_nums <- as.integer(sub(".*_split_(\\d+)_wgcna\\.rds$", "\\1", basename(ig_paths)))
+  
+  ig_df <- data.frame(
+    path = ig_paths,
+    cell_line = cell_lines,
+    split = split_nums,
+    stringsAsFactors = FALSE
+  )
+  
+  source_sigs_full <- lapply(nci_h23_sigs_all, function(x) x$up)
+  
+  results <- foreach(
+    j = seq_len(nrow(ig_df)),
+    .packages=c("sigrecon","igraph"),
+    .combine=function(a,b){
+      for(cl in names(b)){
+        if(is.null(a[[cl]])) a[[cl]] <- list()
+        a[[cl]] <- c(a[[cl]], b[[cl]])
+      }
+      a
+    },
+    .init=list()
+  ) %dopar% {
     
-    split_row <- ig_df %>%
-      dplyr::filter(cell_line == cl, split == i)
+    cl <- ig_df$cell_line[j]
+    split_i <- ig_df$split[j]
+    path <- ig_df$path[j]
     
-    if(nrow(split_row) == 0) return(NULL)
+    ig <- readRDS(path)
     
-    ig <- readRDS(split_row$path)
+    split_col <- paste0("split_", split_i)
     
-    split_col <- paste0("split_", i)
+    drugs_in_split <- drug_splits$drug[drug_splits[[split_col]] == split_keep]
     
-    drugs_in_split <- drug_splits$drug[drug_splits[[split_col]] == FALSE]
-    
-    source_sigs <- lapply(nci_h23_sigs_all, function(x) x$up)
-    
-    shared_drugs <- intersect(drugs_in_split, names(source_sigs))
-    source_sigs <- source_sigs[shared_drugs]
+    shared_drugs <- intersect(drugs_in_split, names(source_sigs_full))
+    source_sigs <- source_sigs_full[shared_drugs]
     
     sig_lengths <- lengths(source_sigs)
     
@@ -93,108 +101,26 @@ results <- foreach(cl = unique(ig_df$cell_line)) %:%
       limit = sig_lengths
     )
     
-    rm(ig)
-    gc()
-    
-    list(list(
-      cell_line = cl,
-      split = paste0("split_", i),
-      sigs = recon_sigs
-    ))
+    list(
+      setNames(
+        list(setNames(list(recon_sigs), paste0("split_", split_i))),
+        cl
+      )
+    )
   }
-
-# rebuild per-cell-line objects
-results_df <- bind_rows(lapply(results, as.data.frame))
-
-for(cl in unique(results_df$cell_line)){
   
-  cl_rows <- results[ sapply(results, function(x) x$cell_line == cl) ]
-  
-  recon_list <- setNames(
-    lapply(cl_rows, function(x) x$sigs),
-    sapply(cl_rows, function(x) x$split)
-  )
-  
-  saveRDS(
-    recon_list,
-    file.path(save_path, paste0(cl, "_control_1_10th.rds"))
-  )
+  saveRDS(results, file.path(save_path, outfile))
 }
 
-print("Done with 1/10th Benchmarking.")
-
-# ---------------------------
-# 9/10th Benchmarking
-# ---------------------------
-
-ig_paths <- Sys.glob(file.path(PATH, "data/wgcna_networks/tahoe/*control_9_10th*.rds"))
-ig_paths <- ig_paths[-c(51:60)]
-
-cell_lines <- sub("_control_9_10th_split_.*", "", basename(ig_paths))
-split_nums <- sub(".*_split_(\\d+)_wgcna\\.rds$", "\\1", basename(ig_paths))
-
-ig_df <- data.frame(
-  path = ig_paths,
-  cell_line = cell_lines,
-  split = split_nums,
-  stringsAsFactors = FALSE
+# run experiments
+run_benchmark(
+  "data/wgcna_networks/tahoe/*control_1_10th*.rds",
+  FALSE,
+  "control_1_10th.rds"
 )
 
-results <- foreach(cl = unique(ig_df$cell_line)) %:%
-  foreach(i = 1:10, .combine = 'c') %dopar% {
-    
-    split_row <- ig_df %>%
-      dplyr::filter(cell_line == cl, split == i)
-    
-    if(nrow(split_row) == 0) return(NULL)
-    
-    ig <- readRDS(split_row$path)
-    
-    split_col <- paste0("split_", i)
-    
-    drugs_in_split <- drug_splits$drug[drug_splits[[split_col]] == TRUE]
-    
-    source_sigs <- lapply(nci_h23_sigs_all, function(x) x$up)
-    
-    shared_drugs <- intersect(drugs_in_split, names(source_sigs))
-    source_sigs <- source_sigs[shared_drugs]
-    
-    sig_lengths <- lengths(source_sigs)
-    
-    recon_sigs <- network_sig(
-      ig = ig,
-      seeds = source_sigs,
-      sig = "rwr",
-      avg_p = TRUE,
-      bootstrap = TRUE,
-      n_bootstraps = 30,
-      limit = sig_lengths
-    )
-    
-    rm(ig)
-    gc()
-    
-    list(list(
-      cell_line = cl,
-      split = paste0("split_", i),
-      sigs = recon_sigs
-    ))
-  }
-
-for(cl in unique(sapply(results, `[[`, "cell_line"))){
-  
-  cl_rows <- results[sapply(results, function(x) x$cell_line == cl)]
-  
-  recon_list <- setNames(
-    lapply(cl_rows, function(x) x$sigs),
-    sapply(cl_rows, function(x) x$split)
-  )
-  
-  saveRDS(
-    recon_list,
-    file.path(save_path, paste0(cl, "_control_9_10th.rds"))
-  )
-}
-
-print("Done with 9/10th Benchmarking.")
-                        
+run_benchmark(
+  "data/wgcna_networks/tahoe/*control_9_10th*.rds",
+  TRUE,
+  "control_9_10th.rds"
+)

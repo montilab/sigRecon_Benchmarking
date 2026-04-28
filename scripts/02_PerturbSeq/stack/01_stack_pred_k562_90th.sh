@@ -1,11 +1,11 @@
 #!/bin/bash -l
-#$ -l h_rt=24:00:00
+#$ -l h_rt=3:00:00
 #$ -N stack_k562_90th
 #$ -m e
 #$ -j y
 #$ -l gpus=1
 #$ -l gpu_c=8.0
-#$ -P montilab-p
+#$ -P el-studies
 #$ -pe omp 16
 #$ -t 1-10
 
@@ -39,12 +39,16 @@ mapfile -t GENES_ARRAY < <(awk -F'[,\t]' -v col="${SPLIT_COL}" '
     }
     {
         gsub(/"/, "", $col_idx)
-        if(tolower($col_idx) ~ /^(true|True|TRUE|1)$/) {
+        if(tolower($col_idx) ~ /^(true|True|TRUE)$/) {
             gsub(/"/, "", $1)
             print $1
         }
     }
 ' "${SPLITS_CSV}")
+
+# Append control perturbation
+# GENES_ARRAY+=("non-targeting")
+GENES_ARRAY=("non-targeting")
 
 echo "Found ${#GENES_ARRAY[@]} genes for ${SPLIT_COL}"
 

@@ -1,11 +1,11 @@
 #!/bin/bash -l
-#$ -l h_rt=24:00:00
+#$ -l h_rt=36:00:00
 #$ -N stack_rpe1_10th
 #$ -m e
 #$ -j y
 #$ -l gpus=1
 #$ -l gpu_c=8.0
-#$ -P el-studies
+#$ -P montilab-p
 #$ -pe omp 16
 #$ -t 1-10
 
