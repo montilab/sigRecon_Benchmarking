@@ -3,7 +3,7 @@ library(doParallel)
 library(sigrecon)
 library(igraph)
 detectCores()
-registerDoParallel(24)
+registerDoParallel(27)
 
 PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon")
 save_path <- file.path(PATH, "data/sigs/tahoe/networkprop/")
@@ -63,17 +63,10 @@ run_benchmark <- function(pattern, split_keep, outfile){
   
   source_sigs_full <- lapply(nci_h23_sigs_all, function(x) x$up)
   
-  results <- foreach(
+  results_df <- foreach(
     j = seq_len(nrow(ig_df)),
-    .packages=c("sigrecon","igraph"),
-    .combine=function(a,b){
-      for(cl in names(b)){
-        if(is.null(a[[cl]])) a[[cl]] <- list()
-        a[[cl]] <- c(a[[cl]], b[[cl]])
-      }
-      a
-    },
-    .init=list()
+    .packages = c("sigrecon","igraph"),
+    .combine = rbind
   ) %dopar% {
     
     cl <- ig_df$cell_line[j]
@@ -101,12 +94,22 @@ run_benchmark <- function(pattern, split_keep, outfile){
       limit = sig_lengths
     )
     
-    list(
-      setNames(
-        list(setNames(list(recon_sigs), paste0("split_", split_i))),
-        cl
-      )
+    data.frame(
+      cell_line = cl,
+      split = split_i,
+      recon = I(list(recon_sigs))
     )
+  }
+  saveRDS(results_df, file.path(save_path, paste0("df_", outfile)))
+  
+  results <- list()
+  
+  for(i in seq_len(nrow(results_df))){
+    cl <- results_df$cell_line[i]
+    split_name <- paste0("split_", results_df$split[i])
+    
+    if(is.null(results[[cl]])) results[[cl]] <- list()
+    results[[cl]][[split_name]] <- results_df$recon[[i]]
   }
   
   saveRDS(results, file.path(save_path, outfile))
