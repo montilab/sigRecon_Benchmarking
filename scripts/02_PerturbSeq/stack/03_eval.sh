@@ -1,12 +1,11 @@
 #!/bin/bash -l
-#$ -l h_rt=96:00:00
-#$ -N deseq_k562_10
+#$ -l h_rt=12:00:00
+#$ -N ps_stack_eval
 #$ -m e
 #$ -j y
-#$ -P montilab-p
-#$ -pe omp 28
-#$ -t 4
+#$ -P el-studies
+#$ -pe omp 16
 
 cd /rprojectnb2/montilab-p/projects/brcameta/projects/sig_recon/scripts/02_PerturbSeq/stack
 module load R/4.4.3
-Rscript --verbose 02_deseq.R k562 10th $SGE_TASK_ID
+Rscript --verbose 03_eval.R

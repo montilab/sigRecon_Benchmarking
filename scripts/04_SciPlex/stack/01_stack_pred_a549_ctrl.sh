@@ -18,6 +18,6 @@ stack-generation --checkpoint "scripts/stack/notebooks/tutorial-pred-model/bc_la
 --split-column product_name \
 --batch-size 16 \
 --num-steps 5 \
---output-dir "/restricted/projectnb/agedisease/CBMrepositoryData/perturbational_data/srivatsan_2019/stack_pred_from_a549" \
+--output-dir "/restricted/projectnb/agedisease/CBMrepositoryData/perturbational_data/srivatsan_2019/stack_pred/ctrl/a549" \
 --prompt-ratio 0.25 \
 --context-ratio 0.4

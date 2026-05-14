@@ -3,7 +3,7 @@
 #$ -N gtex_net
 #$ -m e
 #$ -j y
-#$ -P brcameta
+#$ -P el-studies
 #$ -pe omp 16
 
 cd /rprojectnb2/montilab-p/projects/brcameta/projects/sig_recon/scripts

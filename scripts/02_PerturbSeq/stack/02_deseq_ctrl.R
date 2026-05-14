@@ -13,16 +13,14 @@ reticulate::use_condaenv("r-sceasy")
 options(Seurat.object.assay.version = "v5")
 
 args <- commandArgs(trailingOnly = TRUE)
-if(length(args) != 3){
-  stop("Usage: Rscript 02_deseq_stack.R <cell_line> <experiment> <split>")
+if(length(args) != 1){
+  stop("Usage: Rscript 02_deseq_stack.R <cell_line>")
 }
 cell_line <- args[1]
-experiment <- args[2]
-split <- args[3]
-message("Running: ", cell_line, " ", experiment, " split ", split)
+message("Running: ", cell_line)
 
-BASE_DATA_PATH <- file.path(Sys.getenv("AGED"), "CBMrepositoryData/perturbational_data/replogle_2022/stack_pred")
-DATA_DIR <- file.path(BASE_DATA_PATH, paste0(cell_line, "_all_split_", experiment, "_", split))
+BASE_DATA_PATH <- file.path(Sys.getenv("AGED"), "CBMrepositoryData/perturbational_data/replogle_2022")
+DATA_DIR <- file.path(BASE_DATA_PATH, paste0(cell_line, "_stack_pred"))
 SAVE_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon/data/sigs/perturb-seq/stack")
 dir.create(SAVE_PATH, showWarnings = FALSE, recursive = TRUE)
 
@@ -189,7 +187,7 @@ sigs <- foreach(
 }
 
 sigs_df <- bind_rows(sigs)
-df_outfile <- paste0(cell_line, "_", experiment, "_split_", split, "_sigs_df.rds")
+df_outfile <- paste0(cell_line, "_ctrl_sigs_df.rds")
 saveRDS(sigs_df, file.path(SAVE_PATH, df_outfile))
 
 message("Saved: ", df_outfile)

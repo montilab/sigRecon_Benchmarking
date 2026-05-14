@@ -2,7 +2,8 @@ library(Seurat)
 library(tidyverse)
 library(sigrecon)
 library(stringdist)
-DATA_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon/data/stack_splits/sciplex")
+DATA_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon/data/sigs/sciplex/stack")
+SAVE_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon/results/eval/sciplex")
 SC_PATH <- file.path(Sys.getenv("AGED"), "CBMrepositoryData/perturbational_data/srivatsan_2019")
 
 # 1. Loading data
@@ -10,9 +11,9 @@ a549 <- readRDS(file.path(SC_PATH, "a549.rds"))
 # meta.features are all equivalent
 # k562 <- readRDS(file.path(SC_PATH, "k562.rds"))
 # mcf7 <- readRDS(file.path(SC_PATH, "mcf7.rds"))
-a549_pred_df <- readRDS(file.path(DATA_PATH, "a549_sigs.rds"))
-k562_pred_df <- readRDS(file.path(DATA_PATH, "k562_sigs.rds"))
-mcf7_pred_df <- readRDS(file.path(DATA_PATH, "mcf7_sigs.rds"))
+a549_pred_df <- readRDS(file.path(DATA_PATH, "a549_ctrl_sigs.rds"))
+k562_pred_df <- readRDS(file.path(DATA_PATH, "k562_ctrl_sigs.rds"))
+mcf7_pred_df <- readRDS(file.path(DATA_PATH, "mcf7_ctrl_sigs.rds"))
 
 a549_true_sigs <- sigrecon::sciplex.a549
 k562_true_sigs <- sigrecon::sciplex.k562
@@ -25,60 +26,43 @@ stopifnot(names(mcf7_true_sigs) == names(k562_true_sigs))
 ensembl_hgnc_tbl <- a549@assays$RNA@meta.features %>%
   tibble::rownames_to_column("ensembl_id")
 a549_pred_df <- a549_pred_df %>% 
-  tibble::rownames_to_column(var = "id") %>% 
-  dplyr::mutate(hgnc = sub("\\.\\.\\..*$", "", id)) %>%
-  dplyr::left_join(ensembl_hgnc_tbl %>% select(feature_name, ensembl_id), by = c("hgnc" = "feature_name")) %>% 
-  dplyr::group_by(p_val, avg_log2FC, product) %>%
+  dplyr::left_join(ensembl_hgnc_tbl %>% select(feature_name, ensembl_id), by = c("gene" = "feature_name")) %>% 
+  dplyr::group_by(pvalue, log2FoldChange, product) %>%
   tidyr::fill(ensembl_id, .direction = "downup") %>%
   dplyr::ungroup() %>%
-  dplyr::select(-c(id, hgnc)) %>%
   dplyr::left_join(ensembl_hgnc_tbl %>% select(feature_name, ensembl_id), by = "ensembl_id")
 k562_pred_df <- k562_pred_df %>% 
-  tibble::rownames_to_column(var = "id") %>% 
-  dplyr::mutate(hgnc = sub("\\.\\.\\..*$", "", id)) %>%
-  dplyr::left_join(ensembl_hgnc_tbl %>% select(feature_name, ensembl_id), by = c("hgnc" = "feature_name")) %>% 
-  dplyr::group_by(p_val, avg_log2FC, product) %>%
+  dplyr::left_join(ensembl_hgnc_tbl %>% select(feature_name, ensembl_id), by = c("gene" = "feature_name")) %>% 
+  dplyr::group_by(pvalue, log2FoldChange, product) %>%
   tidyr::fill(ensembl_id, .direction = "downup") %>%
   dplyr::ungroup() %>%
-  dplyr::select(-c(id, hgnc)) %>%
   dplyr::left_join(ensembl_hgnc_tbl %>% select(feature_name, ensembl_id), by = "ensembl_id")
 mcf7_pred_df <- mcf7_pred_df %>% 
-  tibble::rownames_to_column(var = "id") %>% 
-  dplyr::mutate(hgnc = sub("\\.\\.\\..*$", "", id)) %>%
-  dplyr::left_join(ensembl_hgnc_tbl %>% select(feature_name, ensembl_id), by = c("hgnc" = "feature_name")) %>% 
-  dplyr::group_by(p_val, avg_log2FC, product) %>%
+  dplyr::left_join(ensembl_hgnc_tbl %>% select(feature_name, ensembl_id), by = c("gene" = "feature_name")) %>% 
+  dplyr::group_by(pvalue, log2FoldChange, product) %>%
   tidyr::fill(ensembl_id, .direction = "downup") %>%
   dplyr::ungroup() %>%
-  dplyr::select(-c(id, hgnc)) %>%
   dplyr::left_join(ensembl_hgnc_tbl %>% select(feature_name, ensembl_id), by = "ensembl_id")
 
 # 2. Converting to named genelist
 a549_mcf7_sigs <- a549_pred_df %>% 
   dplyr::filter(target_cell_line == "mcf7") %>% 
-  sig_filter_fn(., perts = unique(a549_pred_df$product), pert_col = "product", log2fc_col = "avg_log2FC", pval_col = "p_val_adj", geneid_col = "ensembl_id")
+  sig_filter_fn(., perts = unique(a549_pred_df$product), pert_col = "product", log2fc_col = "log2FoldChange", pval_col = "padj", alpha = 1.1, geneid_col = "ensembl_id")
 a549_k562_sigs <- a549_pred_df %>% 
   dplyr::filter(target_cell_line == "k562") %>% 
-  sig_filter_fn(., perts = unique(a549_pred_df$product), pert_col = "product", log2fc_col = "avg_log2FC", pval_col = "p_val_adj", geneid_col = "ensembl_id")
+  sig_filter_fn(., perts = unique(a549_pred_df$product), pert_col = "product", log2fc_col = "log2FoldChange", pval_col = "padj", alpha = 1.1, geneid_col = "ensembl_id")
 k562_mcf7_sigs <- k562_pred_df %>% 
   dplyr::filter(target_cell_line == "mcf7") %>% 
-  sig_filter_fn(., perts = unique(k562_pred_df$product), pert_col = "product", log2fc_col = "avg_log2FC", pval_col = "p_val_adj", geneid_col = "ensembl_id")
+  sig_filter_fn(., perts = unique(k562_pred_df$product), pert_col = "product", log2fc_col = "log2FoldChange", pval_col = "padj", alpha = 1.1, geneid_col = "ensembl_id")
 k562_a549_sigs <- k562_pred_df %>% 
   dplyr::filter(target_cell_line == "a549") %>% 
-  sig_filter_fn(., perts = unique(k562_pred_df$product), pert_col = "product", log2fc_col = "avg_log2FC", pval_col = "p_val_adj", geneid_col = "ensembl_id")
+  sig_filter_fn(., perts = unique(k562_pred_df$product), pert_col = "product", log2fc_col = "log2FoldChange", pval_col = "padj", alpha = 1.1, geneid_col = "ensembl_id")
 mcf7_a549_sigs <- mcf7_pred_df %>% 
   dplyr::filter(target_cell_line == "a549") %>% 
-  sig_filter_fn(., perts = unique(mcf7_pred_df$product), pert_col = "product", log2fc_col = "avg_log2FC", pval_col = "p_val_adj", geneid_col = "ensembl_id")
+  sig_filter_fn(., perts = unique(mcf7_pred_df$product), pert_col = "product", log2fc_col = "log2FoldChange", pval_col = "padj", alpha = 1.1, geneid_col = "ensembl_id")
 mcf7_k562_sigs <- mcf7_pred_df %>% 
   dplyr::filter(target_cell_line == "k562") %>% 
-  sig_filter_fn(., perts = unique(mcf7_pred_df$product), pert_col = "product", log2fc_col = "avg_log2FC", pval_col = "p_val_adj", geneid_col = "ensembl_id")
-
-# Converting back to ensemblIDs
-# a549_mcf7_sigs <- lapply(a549_mcf7_sigs, function(x) lapply(x, function(y) ensembl_hgnc_tbl$ensembl_id[match(y, ensembl_hgnc_tbl$feature_name)]))
-# a549_k562_sigs <- lapply(a549_k562_sigs, function(x) lapply(x, function(y) ensembl_hgnc_tbl$ensembl_id[match(y, ensembl_hgnc_tbl$feature_name)]))
-# k562_mcf7_sigs <- lapply(k562_mcf7_sigs, function(x) lapply(x, function(y) ensembl_hgnc_tbl$ensembl_id[match(y, ensembl_hgnc_tbl$feature_name)]))
-# k562_a549_sigs <- lapply(k562_a549_sigs, function(x) lapply(x, function(y) ensembl_hgnc_tbl$ensembl_id[match(y, ensembl_hgnc_tbl$feature_name)]))
-# mcf7_a549_sigs <- lapply(mcf7_a549_sigs, function(x) lapply(x, function(y) ensembl_hgnc_tbl$ensembl_id[match(y, ensembl_hgnc_tbl$feature_name)]))
-# mcf7_k562_sigs <- lapply(mcf7_k562_sigs, function(x) lapply(x, function(y) ensembl_hgnc_tbl$ensembl_id[match(y, ensembl_hgnc_tbl$feature_name)]))
+  sig_filter_fn(., perts = unique(mcf7_pred_df$product), pert_col = "product", log2fc_col = "log2FoldChange", pval_col = "padj", alpha = 1.1, geneid_col = "ensembl_id")
 
 a549_mcf7_sigs <- lapply(a549_mcf7_sigs, function(x) lapply(x, function(y) y[!is.na(y)]))
 a549_k562_sigs <- lapply(a549_k562_sigs, function(x) lapply(x, function(y) y[!is.na(y)]))
@@ -109,7 +93,7 @@ for (i in seq_along(missing_names)) {
 }
 
 View(matches_df %>% arrange(distance))
-matches_df <- matches_df %>% arrange(distance) %>% dplyr::slice(c(1:3,5:21,23:30,36:37,39,43,49,51,61,67))
+matches_df <- matches_df %>% arrange(distance) %>% dplyr::slice(c(1:8,10:13,15,18,20:21))
 # Apply after reviewing
 idx <- match(names(a549_mcf7_sigs), matches_df$stack_name)
 names(a549_mcf7_sigs)[!is.na(idx)] <- matches_df$best_match[na.omit(idx)]
@@ -193,8 +177,7 @@ combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("sour
                                 all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)), 
                                 by = c("source", "gene"), 
                                 suffixes = c("_FALSE", "_TRUE")) %>% tibble
-saveRDS(combined_aggregated_df, file.path(DATA_PATH, "eval_table.rds"))
-combined_aggregated_df <- readRDS(file.path(DATA_PATH, "eval_table.rds"))
+saveRDS(combined_aggregated_df, file.path(SAVE_PATH, "stack_ctrl_eval_table.rds"))
 
 # Unpaired 
 combined_aggregated_df %>% 

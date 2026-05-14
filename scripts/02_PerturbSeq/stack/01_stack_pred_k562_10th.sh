@@ -5,12 +5,13 @@
 #$ -j y
 #$ -l gpus=1
 #$ -l gpu_c=8.0
-#$ -P el-studies
+#$ -P montilab-p
 #$ -pe omp 16
 #$ -t 6-10
 
 cd /restricted/projectnb/brcameta/projects/sig_recon/
-mamba activate stack
+module load miniconda
+conda activate stack
 
 # Paths
 DATA_DIR="/rprojectnb2/montilab-p/projects/brcameta/projects/sig_recon/data/stack_splits/perturb_seq/splits"

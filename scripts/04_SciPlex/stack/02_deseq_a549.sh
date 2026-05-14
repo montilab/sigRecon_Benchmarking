@@ -1,6 +1,6 @@
 #!/bin/bash -l
 #$ -l h_rt=72:00:00
-#$ -N deseq_a549
+#$ -N deseq_a549_scip
 #$ -m e
 #$ -j y
 #$ -P montilab-p
@@ -11,7 +11,7 @@
 cd /rprojectnb2/montilab-p/projects/brcameta/projects/sig_recon/scripts/04_SciPlex/stack
 module load R/4.4.3
 Rscript --verbose 02_deseq.R \
-  --input_dir "/restricted/projectnb/agedisease/CBMrepositoryData/perturbational_data/srivatsan_2019/stack_pred_from_a549/" \
-  --output_dir "/rprojectnb2/montilab-p/projects/brcameta/projects/sig_recon/data/stack/sciplex/" \
+  --input_dir "/restricted/projectnb/agedisease/CBMrepositoryData/perturbational_data/srivatsan_2019/stack_pred/ctrl/a549/" \
+  --output_dir "/rprojectnb2/montilab-p/projects/brcameta/projects/sig_recon/data/sigs/sciplex/stack/" \
   --cell_line "a549" \
   --ctrl_name "Vehicle"

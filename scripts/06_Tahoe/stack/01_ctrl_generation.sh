@@ -10,7 +10,8 @@
 #$ -l mem_per_core=16G
 
 cd /restricted/projectnb/brcameta/projects/sig_recon/
-mamba activate stack
+module load miniconda
+conda activate stack
 
 # Directory containing the data files
 DATA_DIR="/restricted/projectnb/agedisease/CBMrepositoryData/perturbational_data/tahoe/stack_subsets/ctrl_comparison"

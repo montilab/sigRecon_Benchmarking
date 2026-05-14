@@ -1,14 +1,11 @@
 #!/bin/bash -l
-#$ -l h_rt=48:00:00
-#$ -N deseq_rpe1_90
+#$ -l h_rt=96:00:00
+#$ -N deseq_rpe1_ctrl
 #$ -m e
 #$ -j y
 #$ -P montilab-p
-#$ -l buyin=TRUE
-#$ -pe omp 16
-#$ -l mem_per_core=16G
-#$ -t 1-10
+#$ -pe omp 28
 
 cd /rprojectnb2/montilab-p/projects/brcameta/projects/sig_recon/scripts/02_PerturbSeq/stack
 module load R/4.4.3
-Rscript --verbose 02_deseq.R rpe1 90th $SGE_TASK_ID
+Rscript --verbose 02_deseq_ctrl.R rpe1 

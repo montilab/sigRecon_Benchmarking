@@ -1,7 +1,25 @@
 library(tidyverse)
-el_aging_sig_df <- read.csv("/restricted/projectnb/brcameta/projects/sig_recon/data/sigs/aging/Combined_Aging_LLFS_ILO_Mortality_LLFS.csv", row.names = 1)
+library(readxl)
+library(babelgene)
 PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon")
+el_aging_sig_df <- read.csv(file.path(PATH, "data/sigs/aging/Combined_Aging_LLFS_ILO_Mortality_LLFS.csv", row.names = 1))
 
+## Source signatures
+# tabulasenis_sigs <- readRDS("/restricted/projectnb/agedisease/projects/challenge2025/data/Tabula_senis/tms_combined_dir/TabulaSenis_omic_collection_by_tissue.rds")
+regeneron_aging_sig <- read_excel(file.path(PATH,"data/sigs/aging/ACEL-25-e70394-s014.xlsx"),sheet = "PBMC")
+regeneron_aging_sig$score <- regeneron_aging_sig$Log2FC*(-log10(regeneron_aging_sig$padj))
+up_sig <- regeneron_aging_sig %>% 
+  dplyr::arrange(desc(score)) %>%
+  dplyr::slice(1:100) %>% 
+  dplyr::pull(gene)
+up_full_sig <- regeneron_aging_sig %>% 
+  dplyr::arrange(desc(score)) %>%
+  dplyr::pull(gene)
+regeneron_sig <- list(up = up_sig, up_full = up_full_sig)
+regeneron_sig_h <- lapply(regeneron_sig, function(x) babelgene::orthologs(genes = x, species = "mouse", human = FALSE)$human_ensembl)
+saveRDS(regeneron_sig, file.path(PATH, "data/sigs/aging/regeneron_sig_m.rds"))
+saveRDS(regeneron_sig_h, file.path(PATH, "data/sigs/aging/regeneron_sig_h.rds"))
+## Ground truth signature
 ilo_aging_sig <- el_aging_sig_df %>% 
   dplyr::filter(age_sig_ilo) %>%
   dplyr::filter(age_dir_ilo == "Inc.") %>%

@@ -28,6 +28,10 @@ SPLIT_COL="split_${SPLIT_NUM}"
 echo "Processing ${SPLIT_NAME} (column: ${SPLIT_COL})"
 echo "Base adata: ${SPLIT_FILE}"
 
+# Output directory
+OUTPUT_DIR="/restricted/projectnb/agedisease/CBMrepositoryData/perturbational_data/replogle_2022/stack_pred/${SPLIT_NAME}"
+mkdir -p "${OUTPUT_DIR}"
+
 # Extract TRUE genes for this split into array
 mapfile -t GENES_ARRAY < <(awk -F'[,\t]' -v col="${SPLIT_COL}" '
     NR==1 {
@@ -68,7 +72,7 @@ stack-generation --checkpoint "scripts/stack/notebooks/tutorial-pred-model/bc_la
 --split-values "${GENES_ARRAY[@]}" \
 --batch-size 16 \
 --num-steps 5 \
---output-dir "/restricted/projectnb/agedisease/CBMrepositoryData/perturbational_data/replogle_2022/stack_pred/${SPLIT_NAME}" \
+--output-dir "${OUTPUT_DIR}" \
 --prompt-ratio 0.25 \
 --context-ratio 0.4
 

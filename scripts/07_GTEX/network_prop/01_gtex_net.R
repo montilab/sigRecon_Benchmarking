@@ -22,7 +22,9 @@ foreach(filepath=filepaths) %dopar% {
     print(paste0("Not enough samples for ", tissue_name))
   } else {
     print(paste0("Processing ", tissue_name))
-
+    # Making default assay DESeq2_log for variable gene identification + network learning
+    assays(se) <- assays(se)[c("DESeq2_log", "counts")]
+    
     se_mad_genes <- sigrecon:::rank.var.eset(se)$values[1:10000]
     se <- se[se_mad_genes,]
     se_mat <- assay(se)

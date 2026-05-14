@@ -6,6 +6,7 @@ scripts/*/archive
 scripts/*/*/archive
 scripts/scGPT
 scripts/stack
+scripts/07_GTEX
 scripts/02_PerturbSeq/scgpt/wandb
 scripts/02_PerturbSeq/scgpt/save
 scripts/02_PerturbSeq/scgpt/data

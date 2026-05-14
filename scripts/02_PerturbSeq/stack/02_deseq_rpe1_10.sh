@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#$ -l h_rt=72:00:00
+#$ -l h_rt=48:00:00
 #$ -N deseq_rpe1_10
 #$ -m e
 #$ -j y
