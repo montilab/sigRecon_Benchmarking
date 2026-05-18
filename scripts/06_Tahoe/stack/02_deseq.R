@@ -10,7 +10,7 @@ library(sigrecon)
 library(mori)
 
 reticulate::use_condaenv("r-sceasy", required=TRUE)
-registerDoParallel(10)
+registerDoParallel(5)
 
 parser <- ArgumentParser()
 parser$add_argument("--input_dir", required=TRUE)
@@ -44,6 +44,11 @@ example_ctrl <- Sys.glob(file.path(split_dirs[1], paste0("*",ctrl_name,"*.h5ad")
 adata_tmp <- anndata::read_h5ad(example_ctrl)
 
 cell_lines <- unique(adata_tmp$obs$cell_name)
+if(experiment == "10th") {
+  cell_lines <- cell_lines[5:length(cell_lines)]
+} else {
+  cell_lines <- cell_lines[6:length(cell_lines)]
+}
 
 for(target_cell_line in cell_lines){
   

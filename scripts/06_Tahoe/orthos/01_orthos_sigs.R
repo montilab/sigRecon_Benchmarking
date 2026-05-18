@@ -1,19 +1,20 @@
-library(tidyverse)
+`library(tidyverse)
 library(Seurat)
 library(Matrix)
-library(orthos)
+library(reticulate)
+Sys.setenv(RETICULATE_PYTHON_ENV = "r-orthos")
+reticulate::use_condaenv("r-orthos", required = TRUE)
+Sys.setenv(BASILISK_EXTERNAL_DIR = file.path(Sys.getenv("MLAB"), "personal/andrewdr/basilisk"))
 library(org.Hs.eg.db)
 library(AnnotationDbi)
 library(sigrecon)
 
 PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon")
-SAVE_PATH <- file.path(PATH, "data/sigs/tahoe")
+SAVE_PATH <- file.path(PATH, "data/sigs/tahoe/orthos")
 
 PREFERRED_SOURCE_CELL <- "NCI-H23"
 CONTROL_NAME <- "DMSO_TF"
 ORGANISM <- "Human"
-
-dir.create(SAVE_PATH, recursive = TRUE, showWarnings = FALSE)
 
 # ------------------------------------------------
 # Helpers

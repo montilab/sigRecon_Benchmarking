@@ -18,7 +18,7 @@ args <- parser$parse_args()
 experiment <- args$experiment
 
 SPLIT_TYPE <- experiment
-
+print(paste0("Benchmarking ", SPLIT_TYPE))
 # Signature preparation
 # 1. Need to map to ensembl since ground truth was generated with ensemblIDs but predicted signatures are in gene symbols
 # 2. Change name of drugs back to ground truth labels since stack slightly changes these upon generation.
@@ -120,11 +120,10 @@ k562_a549_sigs <- rename_drugs(k562_a549_sigs, rename_map)
 mcf7_a549_sigs <- rename_drugs(mcf7_a549_sigs, rename_map)
 mcf7_k562_sigs <- rename_drugs(mcf7_k562_sigs, rename_map)
 
-
 # Evaluation
 a549_mcf7_eval_table <- sig_eval_table(
   source_sigs = lapply(a549_true_sigs, function(x) x$up),
-  pred_sigs = lapply(a549_mcf7_sigs, function(x) x$up),
+  pred_sigs = lapply(a549_mcf7_sigs, function(x) lapply(x, function(y) y$up)),
   true_sigs = mcf7_true_sigs,
   source = "a549_mcf7",
   splits = TRUE,
@@ -135,7 +134,7 @@ a549_mcf7_eval_table <- sig_eval_table(
 
 a549_k562_eval_table <- sig_eval_table(
   source_sigs = lapply(a549_true_sigs, function(x) x$up),
-  pred_sigs = lapply(a549_k562_sigs, function(x) x$up),
+  pred_sigs = lapply(a549_k562_sigs, function(x) lapply(x, function(y) y$up)),
   true_sigs = k562_true_sigs,
   source = "a549_k562",
   splits = TRUE,
@@ -146,7 +145,7 @@ a549_k562_eval_table <- sig_eval_table(
 
 k562_mcf7_eval_table <- sig_eval_table(
   source_sigs = lapply(k562_true_sigs, function(x) x$up),
-  pred_sigs = lapply(k562_mcf7_sigs, function(x) x$up),
+  pred_sigs = lapply(k562_mcf7_sigs, function(x) lapply(x, function(y) y$up)),
   true_sigs = mcf7_true_sigs,
   source = "k562_mcf7",
   splits = TRUE,
@@ -197,5 +196,10 @@ all_eval_table <- rbind(
   mcf7_k562_eval_table
 )
 
-saveRDS(all_eval_table,
+no_change_eval_table <- readRDS("/restricted/projectnb/brcameta/projects/sig_recon/results/eval/sciplex/no_change_eval_table.rds")
+combined_aggregated_df <- merge(no_change_eval_table %>% dplyr::select("source", "gene", "NES", "jacc"), 
+                                all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)), 
+                                by = c("source", "gene"), 
+                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+saveRDS(combined_aggregated_df,
         file.path(SAVE_PATH, paste0("stack_",SPLIT_TYPE,"_eval_table.rds")))

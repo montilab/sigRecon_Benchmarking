@@ -13,3 +13,4 @@ scripts/02_PerturbSeq/scgpt/data
 scripts/*/.ipynb_checkpoints
 scripts/*/*/.ipynb_checkpoints
 *.o*
+*.log

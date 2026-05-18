@@ -5,9 +5,8 @@
 #$ -j y
 #$ -P montilab-p
 #$ -l buyin=TRUE
-#$ -pe omp 16
-#$ -l mem_per_core=16G
-#$ -t 1-10
+#$ -pe omp 28
+#$ -t 10
 
 cd /rprojectnb2/montilab-p/projects/brcameta/projects/sig_recon/scripts/02_PerturbSeq/stack
 module load R/4.4.3
