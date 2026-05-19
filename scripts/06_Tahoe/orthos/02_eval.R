@@ -8,7 +8,7 @@ cl <- makeCluster(cores)
 registerDoParallel(cl)
 
 PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon")
-SAVE_PATH <- file.path(PATH, "results/eval/tahoe")
+SAVE_PATH <- file.path(PATH, "results/eval/tahoe/")
 
 dir.create(SAVE_PATH, recursive = TRUE, showWarnings = FALSE)
 
@@ -16,7 +16,8 @@ combined_no_recon_df <- readRDS(
   file.path(PATH, "results/eval/tahoe/no_change_eval_table.rds")
 )
 
-orthos_sigs <- readRDS(file.path(PATH, "data/sigs/tahoe/orthos_sigs.rds"))
+orthos_sigs <- readRDS(file.path(PATH, "data/sigs/tahoe/orthos/orthos_sigs.rds"))
+orthos_sigs <- lapply(orthos_sigs, function(x) x$up)
 nci_h23_sig <- lapply(tahoe.nci_h23, function(x) x$up)
 
 tahoe_sigs <- list(
@@ -50,11 +51,6 @@ combined_df <- foreach(
   )
 }
 
-saveRDS(
-  combined_df,
-  file.path(SAVE_PATH, "ctrl_orthos_residual_eval_table.rds")
-)
-
 combined_aggregated_df <- merge(
   combined_no_recon_df %>% dplyr::select(source, gene, NES, jacc),
   combined_df %>% mutate(kept_alpha = kept / (kept + displaced)),
@@ -65,7 +61,7 @@ combined_aggregated_df <- merge(
 
 saveRDS(
   combined_aggregated_df,
-  file.path(SAVE_PATH, "ctrl_orthos_residual.rds")
+  file.path(SAVE_PATH, "ctrl_orthos_residual_eval_table.rds")
 )
 
 stopCluster(cl)
