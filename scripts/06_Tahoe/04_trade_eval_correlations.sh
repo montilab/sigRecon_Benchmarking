@@ -4,7 +4,7 @@
 #$ -m e
 #$ -j y
 #$ -P el-studies
-#$ -pe omp 4
+#$ -pe omp 16
 
 cd /rprojectnb2/montilab-p/projects/brcameta/projects/sig_recon/scripts/06_Tahoe
 module load R/4.4.3

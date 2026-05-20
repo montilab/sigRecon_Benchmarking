@@ -4,7 +4,6 @@
 #$ -m e
 #$ -j y
 #$ -P montilab-p
-#$ -l buyin=TRUE
 #$ -pe omp 28
 #$ -t 10
 

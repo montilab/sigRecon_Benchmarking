@@ -12,8 +12,11 @@ DATA_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon
 SAVE_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon/results/eval/tahoe")
 SC_PATH <- file.path(Sys.getenv("AGED"), "CBMrepositoryData/perturbational_data/tahoe")
 
-split_type <- "ctrl"
-
+# parser <- ArgumentParser()
+# parser$add_argument("--split_type", required=TRUE)
+# args <- parser$parse_args()
+# split_type <- args$split_type
+split_type <- "10th"
 nci_sig <- sigrecon::tahoe.nci_h23
 
 target_sig_paths <- Sys.glob(file.path(DATA_PATH, "tahoe*.rds"))
@@ -56,9 +59,9 @@ all_eval_table <- foreach(
         pred_sigs   = lapply(split_pred, \(x) x$up),
         true_sigs   = nci_sig,
         source      = paste0("nci_h23_", cell_line),
-        split_path  = split_path,
-        split_type  = split_type,
-        split_name  = split_name
+        splits = TRUE,
+        split_file  = split_path,
+        split_type  = split_type
       )
       
     })
