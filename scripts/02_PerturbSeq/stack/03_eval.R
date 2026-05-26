@@ -20,103 +20,120 @@ all_eval_no_change_table$source <- if_else(all_eval_no_change_table$source == "k
                                            "k562_rpe1",
                                            "rpe1_k562")
 
-# 1. Control experiment
-rpe1_ctrl_sigs_df <- readRDS(file.path(RECON_PATH, "rpe1_ctrl_sigs_df.rds"))
-k562_ctrl_sigs_df <- readRDS(file.path(RECON_PATH, "k562_ctrl_sigs_df.rds"))
-rpe1_ctrl_sigs <- sig_filter_fn(rpe1_ctrl_sigs_df,
-                                perts = pb_splits$pb,
-                                pval_col = "pvalue",
-                                alpha = 1.1,
-                                log2fc_col = "log2FoldChange",
-                                geneid_col = "gene")
-k562_ctrl_sigs <- sig_filter_fn(k562_ctrl_sigs_df,
-                                perts = pb_splits$pb,
-                                pval_col = "pvalue",
-                                alpha = 1.1,
-                                log2fc_col = "log2FoldChange",
-                                geneid_col = "gene")
-rpe1_ctrl_sigs <- lapply(rpe1_ctrl_sigs, function(x) x$up)
-k562_ctrl_sigs <- lapply(k562_ctrl_sigs, function(x) x$up)
+# # 1. Control experiment
+# rpe1_ctrl_sigs_df <- readRDS(file.path(RECON_PATH, "rpe1_ctrl_sigs_df.rds"))
+# k562_ctrl_sigs_df <- readRDS(file.path(RECON_PATH, "k562_ctrl_sigs_df.rds"))
+# rpe1_ctrl_sigs <- sig_filter_fn(rpe1_ctrl_sigs_df,
+#                                 perts = pb_splits$pb,
+#                                 pval_col = "pvalue",
+#                                 alpha = 1.1,
+#                                 log2fc_col = "log2FoldChange",
+#                                 geneid_col = "gene")
+# k562_ctrl_sigs <- sig_filter_fn(k562_ctrl_sigs_df,
+#                                 perts = pb_splits$pb,
+#                                 pval_col = "pvalue",
+#                                 alpha = 1.1,
+#                                 log2fc_col = "log2FoldChange",
+#                                 geneid_col = "gene")
+# rpe1_ctrl_sigs <- lapply(rpe1_ctrl_sigs, function(x) x$up)
+# k562_ctrl_sigs <- lapply(k562_ctrl_sigs, function(x) x$up)
+# 
+# k562_rpe1_eval_table <- sig_eval_table(source_sigs = k562_sig_up,
+#                                           pred_sigs = k562_ctrl_sigs,
+#                                           true_sigs = perturbseq.rpe1,
+#                                           source = "k562_rpe1",
+#                                           BPPARAM = bp)
+# rpe1_k562_eval_table <- sig_eval_table(source_sigs = rpe1_sig_up,
+#                                           pred_sigs = rpe1_ctrl_sigs,
+#                                           true_sigs = perturbseq.k562,
+#                                           source = "rpe1_k562",
+#                                           BPPARAM = bp)
+# all_eval_table <- rbind(k562_rpe1_eval_table,
+#                         rpe1_k562_eval_table)
+# combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("source", "gene", "NES", "jacc"),
+#                                 all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
+#                                 by = c("source", "gene"),
+#                                 suffixes = c("_FALSE", "_TRUE")) %>% tibble
+# 
+# saveRDS(combined_aggregated_df, file.path(SAVE_PATH, "ctrl_stack_eval_table.rds"))
 
-k562_rpe1_eval_table <- sig_eval_table(source_sigs = k562_sig_up,
-                                          pred_sigs = k562_ctrl_sigs,
-                                          true_sigs = perturbseq.rpe1,
-                                          source = "k562_rpe1",
-                                          BPPARAM = bp)
-rpe1_k562_eval_table <- sig_eval_table(source_sigs = rpe1_sig_up,
-                                          pred_sigs = rpe1_ctrl_sigs,
-                                          true_sigs = perturbseq.k562,
-                                          source = "rpe1_k562",
-                                          BPPARAM = bp)
+# ------------------------------------------------
+# 3. 1/10th experiment
+# ------------------------------------------------
+do_save <- TRUE
+# None of the genes reach significance after stack generation which is why alpha = 1
+if(do_save) {
+  rpe1_paths <- Sys.glob(file.path(RECON_PATH,
+                                   paste0("rpe1_10th_split_*.rds")))
+  k562_paths  <- Sys.glob(file.path(RECON_PATH,
+                                    paste0("k562_10th_split_*.rds")))
+
+  split_names <- sub(".*(split_[0-9]+).*", "\\1", rpe1_paths)
+  rpe1_sigs_df <- lapply(rpe1_paths, readRDS)
+  rpe1_sigs <- lapply(rpe1_sigs_df, function(x) sig_filter_fn(x,
+                                                              perts = unique(pb_splits$pb),
+                                                              log2fc_col = "log2FoldChange",
+                                                              pval_col = "pvalue",
+                                                              geneid_col = "gene",
+                                                              alpha = 1.1))
+  rpe1_sigs <- lapply(rpe1_sigs, function(x) lapply(x, function(y) y$up))
+  names(rpe1_sigs) <- split_names
+  saveRDS(rpe1_sigs, file.path(RECON_PATH, "rpe1_10th_sigs.rds"))
+
+  split_names <- sub(".*(split_[0-9]+).*", "\\1", k562_paths)
+  k562_sigs_df <- lapply(k562_paths, readRDS)
+  k562_sigs <- lapply(k562_sigs_df, function(x) sig_filter_fn(x,
+                                                              perts = unique(pb_splits$pb),
+                                                              log2fc_col = "log2FoldChange",
+                                                              pval_col = "pvalue",
+                                                              geneid_col = "gene",
+                                                              alpha = 1.1))
+  k562_sigs <- lapply(k562_sigs, function(x) lapply(x, function(y) y$up))
+  names(k562_sigs) <- split_names
+  saveRDS(k562_sigs, file.path(RECON_PATH, "k562_10th_sigs.rds"))
+} else {
+  rpe1_sigs <- readRDS(file.path(RECON_PATH, "rpe1_10th_sigs.rds"))
+  k562_sigs <- readRDS(file.path(RECON_PATH, "k562_10th_sigs.rds"))
+}
+
+k562_rpe1_eval_table <- sig_eval_table(
+  source_sigs = k562_sig_up,
+  pred_sigs = k562_sigs,
+  true_sigs = perturbseq.rpe1,
+  source = "k562_rpe1",
+  splits = TRUE,
+  split_file = pb_splits_path,
+  split_pb_col = "pb",
+  split_type = "10th",
+  BPPARAM = bp
+)
+
+rpe1_k562_eval_table <- sig_eval_table(
+  source_sigs = rpe1_sig_up,
+  pred_sigs = rpe1_sigs,
+  true_sigs = perturbseq.k562,
+  source = "rpe1_k562",
+  splits = TRUE,
+  split_file = pb_splits_path,
+  split_pb_col = "pb",
+  split_type = "10th",
+  BPPARAM = bp
+)
+
 all_eval_table <- rbind(k562_rpe1_eval_table,
                         rpe1_k562_eval_table)
-combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("source", "gene", "NES", "jacc"),
-                                all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
-                                by = c("source", "gene"),
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
 
-saveRDS(combined_aggregated_df, file.path(SAVE_PATH, "ctrl_stack_eval_table.rds"))
+combined_aggregated_df <- merge(
+  all_eval_no_change_table %>% dplyr::select("source","gene","NES","jacc"),
+  all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
+  by=c("source","gene"),
+  suffixes=c("_FALSE","_TRUE")
+) %>% tibble()
 
-# # ------------------------------------------------
-# # 2. 1/10th experiment
-# # ------------------------------------------------
-# 
-# for(regime in c("gsva","eigen")){
-#   
-#   message("Processing 1/10th ", regime)
-#   
-#   rpe1_paths <- Sys.glob(file.path(RECON_PATH,
-#                                      paste0("rpe1_k562_10th_", regime, "_split_*.rds")))
-#   k562_paths  <- Sys.glob(file.path(RECON_PATH,
-#                                      paste0("k562_rpe1_10th_", regime, "_split_*.rds")))
-#   
-#   split_names <- sub(".*(split_[0-9]+).*", "\\1", rpe1_paths)
-#   rpe1_sigs <- lapply(rpe1_paths, readRDS)
-#   names(rpe1_sigs) <- split_names
-#   
-#   split_names <- sub(".*(split_[0-9]+).*", "\\1", k562_paths)
-#   k562_sigs <- lapply(k562_paths, readRDS)
-#   names(k562_sigs) <- split_names
-#   
-#   k562_rpe1_eval_table <- sig_eval_table(
-#     source_sigs = k562_sig_up,
-#     pred_sigs = k562_sigs,
-#     true_sigs = perturbseq.rpe1,
-#     source = "k562_rpe1",
-#     splits = TRUE,
-#     split_file = drug_splits_path,
-#     split_pb_col = "pb",
-#     split_type = "10th",
-#     BPPARAM = bp
-#   )
-#   
-#   rpe1_k562_eval_table <- sig_eval_table(
-#     source_sigs = rpe1_sig_up,
-#     pred_sigs = rpe1_sigs,
-#     true_sigs = perturbseq.k562,
-#     source = "rpe1_k562",
-#     splits = TRUE,
-#     split_file = drug_splits_path,
-#     split_pb_col = "pb",
-#     split_type = "10th",
-#     BPPARAM = bp
-#   )
-#   
-#   all_eval_table <- rbind(k562_rpe1_eval_table,
-#                           rpe1_k562_eval_table)
-#   
-#   combined_aggregated_df <- merge(
-#     all_eval_no_change_table %>% dplyr::select("source","gene","NES","jacc"),
-#     all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
-#     by=c("source","gene"),
-#     suffixes=c("_FALSE","_TRUE")
-#   ) %>% tibble()
-#   
-#   saveRDS(combined_aggregated_df,
-#           file.path(SAVE_PATH,
-#                     paste0("10th_stack_",regime,"_eval_table.rds")))
-# }
-# 
+saveRDS(combined_aggregated_df,
+        file.path(SAVE_PATH,
+                  paste0("10th_stack_eval_table.rds")))
+
 
 # # ------------------------------------------------
 # # 3. 9/10th experiment

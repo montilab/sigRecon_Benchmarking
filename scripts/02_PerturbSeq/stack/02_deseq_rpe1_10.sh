@@ -5,7 +5,7 @@
 #$ -j y
 #$ -P montilab-p
 #$ -pe omp 28
-#$ -t 10
+#$ -t 1
 
 cd /rprojectnb2/montilab-p/projects/brcameta/projects/sig_recon/scripts/02_PerturbSeq/stack
 module load R/4.4.3

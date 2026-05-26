@@ -12,14 +12,13 @@ DATA_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon
 SAVE_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon/results/eval/tahoe")
 SC_PATH <- file.path(Sys.getenv("AGED"), "CBMrepositoryData/perturbational_data/tahoe")
 
-# parser <- ArgumentParser()
-# parser$add_argument("--split_type", required=TRUE)
-# args <- parser$parse_args()
-# split_type <- args$split_type
-split_type <- "10th"
+parser <- ArgumentParser()
+parser$add_argument("--split_type", required=TRUE)
+args <- parser$parse_args()
+split_type <- args$split_type
 nci_sig <- sigrecon::tahoe.nci_h23
 
-target_sig_paths <- Sys.glob(file.path(DATA_PATH, "tahoe*.rds"))
+target_sig_paths <- Sys.glob(file.path(DATA_PATH, paste0("tahoe*", split_type, "*.rds")))
 
 split_path <- file.path(Sys.getenv("MLAB"),
                         "projects/brcameta/projects/sig_recon/data/sigs/tahoe/drug_splits.csv")
@@ -34,14 +33,17 @@ all_eval_table <- foreach(
   
   cell_line <- str_match(basename(target_sig_path),
                          "^tahoe_(.*?)_")[,2]
-  
+  cell_line <- str_replace_all(cell_line, "-", "")
+  cell_line <- str_replace_all(cell_line, "\\.", "")
+  cell_line <- str_replace_all(cell_line, " ", "_")
+  cell_line <- toupper(cell_line)
   message("Processing ", cell_line)
   
   if(split_type == "ctrl"){
     
     eval_tbl <- sig_eval_table(
-      source_sigs = lapply(nci_sig, \(x) x$up),
-      pred_sigs   = lapply(pred_sigs, \(x) x$up),
+      source_sigs = lapply(nci_sig, function (x) x$up),
+      pred_sigs   = lapply(pred_sigs, function (x) x$up),
       true_sigs   = nci_sig,
       source      = paste0("nci_h23_", cell_line)
     )
@@ -50,23 +52,17 @@ all_eval_table <- foreach(
     
   } else {
     
-    split_tables <- lapply(names(pred_sigs), function(split_name){
+    eval_tbl <- sig_eval_table(
+      source_sigs = lapply(nci_sig, function (x) x$up),
+      pred_sigs   = lapply(pred_sigs, function (x) lapply(x, function (y) y$up)),
+      true_sigs   = nci_sig,
+      source      = paste0("nci_h23_", cell_line),
+      splits = TRUE,
+      split_file  = split_path,
+      split_type  = split_type
+    )
       
-      split_pred <- pred_sigs[[split_name]]
-      
-      sig_eval_table(
-        source_sigs = lapply(nci_sig, \(x) x$up),
-        pred_sigs   = lapply(split_pred, \(x) x$up),
-        true_sigs   = nci_sig,
-        source      = paste0("nci_h23_", cell_line),
-        splits = TRUE,
-        split_file  = split_path,
-        split_type  = split_type
-      )
-      
-    })
-    
-    bind_rows(split_tables)
+    eval_tbl
   }
 }
 
