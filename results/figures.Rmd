@@ -1,0 +1,1119 @@
+---
+title: "Figures"
+author: "Andrew Chen"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: 'united'
+    toc: true
+    toc_depth: 1
+    toc_float: true
+    df_print: paged
+    code_folding: hide
+---
+
+```{r, echo=FALSE, message=FALSE}
+library(tidyverse)
+library(sigrecon)
+library(ggplot2)
+library(ggbeeswarm)
+
+PROJECT_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon/")
+RESULTS_PATH <- file.path(PROJECT_PATH, "results/eval/")
+```
+
+```{r}
+summarize_method <- function(df, method_name){
+
+  per_source <- df %>%
+    group_by(source) %>%
+    summarise(
+      jacc_p = wilcox.test(jacc_TRUE, jacc_FALSE,
+                           paired = TRUE,
+                           alternative = "greater")$p.value,
+
+      nes_p = wilcox.test(NES_TRUE, NES_FALSE,
+                          paired = TRUE,
+                          alternative = "greater")$p.value,
+
+      jacc_prop = mean(jacc_TRUE > jacc_FALSE),
+      nes_prop = mean(NES_TRUE > NES_FALSE),
+      .groups="drop"
+    )
+
+  tibble(
+    method = method_name,
+    metric = c("Jaccard","NES"),
+    fisher_p = c(
+      fishers_meta_p(per_source$jacc_p),
+      fishers_meta_p(per_source$nes_p)
+    ),
+    prop = c(
+      mean(per_source$jacc_prop),
+      mean(per_source$nes_prop)
+    )
+  )
+}
+```
+
+# Tahoe {.tabset}
+
+## Control {.tabset}
+```{r}
+tahoe_no_change_df <- readRDS(file.path(RESULTS_PATH, "tahoe/no_change_eval_table.rds"))
+tahoe_ctrl_mean_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_mean_eval_table.rds"))
+tahoe_ctrl_net_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_networkprop_eval_table.rds"))
+tahoe_ctrl_proj_e_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_projectcor_eigen_eval_table.rds"))
+tahoe_ctrl_proj_g_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_projectcor_gsva_eval_table.rds"))
+tahoe_orthos_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_orthos_residual_eval_table.rds"))
+tahoe_stack_df <- readRDS(file.path(RESULTS_PATH, "tahoe/stack_ctrl_eval_table.rds"))
+```
+
+```{r}
+plot_df <- bind_rows(
+  tahoe_no_change_df %>%
+    transmute(drug = gene, method = "No change", jacc, NES),
+
+  tahoe_ctrl_mean_df %>%
+    transmute(drug = gene, method = "Mean", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  tahoe_ctrl_net_df %>%
+    transmute(drug = gene, method = "NetworkProp", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  tahoe_ctrl_proj_e_df %>%
+    transmute(drug = gene, method = "ProjectCor (Eigen)", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  tahoe_ctrl_proj_g_df %>%
+    transmute(drug = gene, method = "ProjectCor (GSVA)", jacc = jacc_TRUE, NES = NES_TRUE),
+  
+  tahoe_orthos_df %>%
+    transmute(drug = gene, method = "Orthos", jacc = jacc_TRUE, NES = NES_TRUE),
+  
+  tahoe_stack_df %>%
+    transmute(drug = gene, method = "Stack", jacc = jacc_TRUE, NES = NES_TRUE),
+)
+
+plot_long <- plot_df %>%
+  dplyr::rename(Jaccard = jacc) %>%
+  pivot_longer(c(Jaccard, NES), names_to = "metric", values_to = "value")
+
+saveRDS(plot_long, file.path(RESULTS_PATH, "tahoe/ctrl_unpaired_plot_df.rds"))
+
+summary_df <- bind_rows(
+  summarize_method(tahoe_ctrl_mean_df, "Mean"),
+  summarize_method(tahoe_ctrl_net_df, "NetworkProp"),
+  summarize_method(tahoe_ctrl_proj_e_df, "ProjectCor (Eigen)"),
+  summarize_method(tahoe_ctrl_proj_g_df, "ProjectCor (GSVA)"),
+  summarize_method(tahoe_orthos_df, "Orthos"),
+  summarize_method(tahoe_stack_df, "Stack")
+)
+saveRDS(summary_df, file.path(RESULTS_PATH, "tahoe/ctrl_paired_plot_df.rds"))
+```
+
+### Unpaired
+```{r}
+baseline_means <- plot_long %>%
+  filter(method == "No change") %>%
+  group_by(metric) %>%
+  summarise(yintercept = median(value), .groups = "drop")
+
+ggplot(plot_long, aes(method, value, fill = method)) +
+  geom_violin(
+    width = 0.6,
+    alpha = 0.3,
+    color = NA,
+    trim = TRUE
+  ) +
+  ggbeeswarm::geom_quasirandom(
+    width = 0.15,
+    alpha = 0.15,
+    size = 0.05,
+    groupOnX = TRUE
+  ) +
+  stat_summary(
+    fun = median,
+    geom = "point",
+    shape = 21,
+    size = 2.5,
+    fill = "white"
+  ) +
+  geom_hline(
+    data = baseline_means,
+    aes(yintercept = yintercept),
+    inherit.aes = FALSE,
+    linetype = "dotted",
+    color = "grey50",
+    linewidth = 0.8
+  ) +
+  facet_wrap(~metric, scales = "free_y") +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(
+    limits = c("No change", "Mean", "NetworkProp", "ProjectCor (Eigen)",
+               "ProjectCor (GSVA)", "Orthos", "Stack")
+  ) +
+  labs(x = "", y = "Score") +
+  theme_classic(base_size = 15) +
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1),
+    legend.position = "none",
+    strip.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold")
+  )
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_ctrl_unpaired.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
+
+### Paired
+```{r}
+ggplot(summary_df,
+       aes(x = -log10(fisher_p),
+           y = method,
+           size = prop,
+           color = -log10(fisher_p))) +
+
+  geom_point(alpha = 0.9) +
+
+  facet_wrap(~metric) +
+  coord_cartesian(xlim = c(-0.02, 0.125)) +
+  scale_color_viridis_c(
+    name = "-log10(meta p)",
+    option = "A"
+  ) +
+
+  scale_size(
+    range = c(3,10),
+    name = "Fraction improved"
+  ) +
+
+  labs(
+    x = "-log10 Fisher meta‑p",
+    y=""
+  ) +
+
+  theme_classic(base_size = 15) +
+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.spacing = unit(2, "lines"),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_ctrl_paired.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
+
+## 10th Results {.tabset}
+```{r}
+tahoe_no_change_df <- readRDS(file.path(RESULTS_PATH, "tahoe/no_change_eval_table.rds"))
+tahoe_ctrl_mean_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_10th_mean_eval_table.rds"))
+tahoe_ctrl_net_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_10th_networkprop_eval_table.rds"))
+tahoe_ctrl_proj_e_df <- readRDS(file.path(RESULTS_PATH, "tahoe/10th_projectcor_eigen_eval_table.rds"))
+tahoe_ctrl_proj_g_df <- readRDS(file.path(RESULTS_PATH, "tahoe/10th_projectcor_gsva_eval_table.rds"))
+```
+
+```{r}
+plot_df <- bind_rows(
+  tahoe_no_change_df %>%
+    transmute(drug = gene, method = "No change", jacc, NES),
+
+  tahoe_ctrl_mean_df %>%
+    transmute(drug = gene, method = "Mean", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  tahoe_ctrl_net_df %>%
+    transmute(drug = gene, method = "NetworkProp", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  tahoe_ctrl_proj_e_df %>%
+    transmute(drug = gene, method = "ProjectCor (Eigen)", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  tahoe_ctrl_proj_g_df %>%
+    transmute(drug = gene, method = "ProjectCor (GSVA)", jacc = jacc_TRUE, NES = NES_TRUE)
+)
+
+plot_long <- plot_df %>%
+  dplyr::rename(Jaccard = jacc) %>%
+  dplyr::group_by(drug, method) %>%
+  dplyr::summarise_all(mean) %>% 
+  dplyr::ungroup() %>%
+  pivot_longer(c(Jaccard, NES), names_to = "metric", values_to = "value")
+
+saveRDS(plot_long, file.path(RESULTS_PATH, "tahoe/ctrl_10th_unpaired_plot_df.rds"))
+
+summary_df <- bind_rows(
+  summarize_method(tahoe_ctrl_mean_df, "Mean"),
+  summarize_method(tahoe_ctrl_net_df, "NetworkProp"),
+  summarize_method(tahoe_ctrl_proj_e_df, "ProjectCor (Eigen)"),
+  summarize_method(tahoe_ctrl_proj_g_df, "ProjectCor (GSVA)")
+)
+saveRDS(summary_df, file.path(RESULTS_PATH, "tahoe/ctrl_10th_paired_plot_df.rds"))
+```
+
+### Unpaired
+```{r}
+baseline_means <- plot_long %>%
+  filter(method == "No change") %>%
+  group_by(metric) %>%
+  summarise(yintercept = median(value), .groups = "drop")
+
+ggplot(plot_long, aes(method, value, fill = method)) +
+
+  geom_violin(
+    width = 0.9,
+    alpha = 0.35,
+    color = NA
+  ) +
+
+  ggbeeswarm::geom_beeswarm(
+    size = 0.1,
+    alpha = 0.7,
+    cex = 0.7
+  ) +
+
+  stat_summary(
+    fun = median,
+    geom = "point",
+    shape = 21,
+    size = 3,
+    fill = "white"
+  ) +
+
+  geom_hline(
+    data = baseline_means,
+    aes(yintercept = yintercept),
+    linetype = "dotted",
+    color = "grey50",
+    linewidth = 0.8
+  ) +
+
+  facet_wrap(
+    ~metric,
+    scales = "free_y"
+  ) +
+
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("No change", "Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)")) + 
+  labs(
+    x = "",
+    y = "Score"
+  ) +
+
+  theme_classic(base_size = 15) +
+
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1),
+    legend.position = "none",
+    strip.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold")
+  )
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_10th_unpaired.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
+
+### Paired
+```{r}
+ggplot(summary_df,
+       aes(x = -log10(fisher_p),
+           y = method,
+           size = prop,
+           color = -log10(fisher_p))) +
+
+  geom_point(alpha = 0.9) +
+
+  facet_wrap(~metric) +
+  coord_cartesian(xlim = c(-0.6, 4.5)) +
+  scale_color_viridis_c(
+    name = "-log10(meta p)",
+    option = "A"
+  ) +
+
+  scale_size(
+    range = c(3,10),
+    name = "Fraction Improved"
+  ) +
+
+  labs(
+    x = "-log10 Fisher meta‑p",
+    y=""
+  ) +
+
+  theme_classic(base_size = 15) +
+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.spacing = unit(2, "lines"),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_10th_paired.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
+
+## 90th Results {.tabset}
+```{r}
+tahoe_no_change_df <- readRDS(file.path(RESULTS_PATH, "tahoe/no_change_eval_table.rds"))
+tahoe_ctrl_mean_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_90th_mean_eval_table.rds"))
+tahoe_ctrl_net_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_90th_networkprop_eval_table.rds"))
+tahoe_ctrl_proj_e_df <- readRDS(file.path(RESULTS_PATH, "tahoe/90th_projectcor_eigen_eval_table.rds"))
+tahoe_ctrl_proj_g_df <- readRDS(file.path(RESULTS_PATH, "tahoe/90th_projectcor_gsva_eval_table.rds"))
+```
+
+```{r}
+plot_df <- bind_rows(
+  tahoe_no_change_df %>%
+    transmute(drug = gene, method = "No change", jacc, NES),
+
+  tahoe_ctrl_mean_df %>%
+    transmute(drug = gene, method = "Mean", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  tahoe_ctrl_net_df %>%
+    transmute(drug = gene, method = "NetworkProp", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  tahoe_ctrl_proj_e_df %>%
+    transmute(drug = gene, method = "ProjectCor (Eigen)", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  tahoe_ctrl_proj_g_df %>%
+    transmute(drug = gene, method = "ProjectCor (GSVA)", jacc = jacc_TRUE, NES = NES_TRUE)
+)
+
+plot_long <- plot_df %>%
+  dplyr::rename(Jaccard = jacc) %>%
+  dplyr::group_by(drug, method) %>%
+  dplyr::summarise_all(mean) %>% 
+  dplyr::ungroup() %>%
+  pivot_longer(c(Jaccard, NES), names_to = "metric", values_to = "value")
+
+saveRDS(plot_long, file.path(RESULTS_PATH, "tahoe/ctrl_90th_unpaired_plot_df.rds"))
+
+summary_df <- bind_rows(
+  summarize_method(tahoe_ctrl_mean_df, "Mean"),
+  summarize_method(tahoe_ctrl_net_df, "NetworkProp"),
+  summarize_method(tahoe_ctrl_proj_e_df, "ProjectCor (Eigen)"),
+  summarize_method(tahoe_ctrl_proj_g_df, "ProjectCor (GSVA)")
+)
+saveRDS(summary_df, file.path(RESULTS_PATH, "tahoe/ctrl_90th_paired_plot_df.rds"))
+```
+
+### Unpaired
+```{r}
+baseline_means <- plot_long %>%
+  filter(method == "No change") %>%
+  group_by(metric) %>%
+  summarise(yintercept = median(value), .groups = "drop")
+
+ggplot(plot_long, aes(method, value, fill = method)) +
+
+  geom_violin(
+    width = 0.9,
+    alpha = 0.35,
+    color = NA
+  ) +
+
+  ggbeeswarm::geom_beeswarm(
+    size = 0.1,
+    alpha = 0.7,
+    cex = 0.7
+  ) +
+
+  stat_summary(
+    fun = median,
+    geom = "point",
+    shape = 21,
+    size = 3,
+    fill = "white"
+  ) +
+
+  geom_hline(
+    data = baseline_means,
+    aes(yintercept = yintercept),
+    linetype = "dotted",
+    color = "grey50",
+    linewidth = 0.8
+  ) +
+
+  facet_wrap(
+    ~metric,
+    scales = "free_y"
+  ) +
+
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("No change", "Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)")) + 
+  labs(
+    x = "",
+    y = "Score"
+  ) +
+
+  theme_classic(base_size = 15) +
+
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1),
+    legend.position = "none",
+    strip.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold")
+  )
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_90th_unpaired.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
+
+### Paired
+```{r}
+ggplot(summary_df,
+       aes(x = -log10(fisher_p),
+           y = method,
+           size = prop,
+           color = -log10(fisher_p))) +
+
+  geom_point(alpha = 0.9) +
+
+  facet_wrap(~metric) +
+  coord_cartesian(xlim = c(-0.2, 7.5)) +
+  scale_color_viridis_c(
+    name = "-log10(meta p)",
+    option = "A"
+  ) +
+
+  scale_size(
+    range = c(3,10),
+    name = "Fraction Improved"
+  ) +
+
+  labs(
+    x = "-log10 Fisher meta‑p",
+    y=""
+  ) +
+
+  theme_classic(base_size = 15) +
+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.spacing = unit(2, "lines"),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_90th_paired.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
+
+## Trade
+```{r}
+trade_metrics_10th <- readRDS(file.path(RESULTS_PATH, "tahoe/trade_metric_correlations/projectCor/10th_projectcor_eigen_trade_joined.rds"))
+trade_metrics_10th
+```
+```{r}
+ggplot(trade_metrics_10th, aes(x = TI, y = delta_NES)) +
+    geom_hline(yintercept = 0, color = "grey75", linewidth = 0.35) +
+    geom_point(aes(color = gene), alpha = 0.72, size = 1.8) +
+    geom_smooth(method = "lm", se = FALSE, color = "black", linewidth = 0.45) +
+    theme_bw(base_size = 11) +
+    theme(
+      panel.grid.minor = element_blank(),
+      legend.position = "right"
+    ) +
+    labs(
+      x = "TI",
+      y = "delta_NES",
+      title = "TI vs delta NES (colored by perturbation)",
+      color = "perturbation"
+    )
+```
+
+```{r}
+ggplot(trade_metrics_10th, aes(x = TI, y = delta_NES)) +
+    geom_hline(yintercept = 0, color = "grey75", linewidth = 0.35) +
+    geom_point(aes(color = target), alpha = 0.72, size = 1.8) +
+    geom_smooth(method = "lm", se = FALSE, color = "black", linewidth = 0.45) +
+    theme_bw(base_size = 11) +
+    theme(
+      panel.grid.minor = element_blank(),
+      legend.position = "right"
+    ) +
+    labs(
+      x = "TI",
+      y = "delta_NES",
+      title = "TI vs delta NES (colored by cell line)",
+      color = "cellline"
+    )
+```
+
+
+# Drugmatrix {.tabset}
+
+## Control {.tabset}
+```{r}
+drugmatrix_no_change_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/no_change_eval_table.rds"))
+drugmatrix_ctrl_mean_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_mean_eval_table.rds"))
+drugmatrix_ctrl_net_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_networkprop_eval_table.rds"))
+drugmatrix_ctrl_proj_e_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_projectcor_eigen_eval_table.rds"))
+drugmatrix_ctrl_proj_g_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_projectcor_gsva_eval_table.rds"))
+```
+
+### Unpaired
+
+```{r}
+plot_df <- bind_rows(
+  drugmatrix_no_change_df %>%
+    transmute(drug = gene, method = "No change", jacc, NES),
+
+  drugmatrix_ctrl_mean_df %>%
+    transmute(drug = gene, method = "Mean", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  drugmatrix_ctrl_net_df %>%
+    transmute(drug = gene, method = "NetworkProp", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  drugmatrix_ctrl_proj_e_df %>%
+    transmute(drug = gene, method = "ProjectCor (Eigen)", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  drugmatrix_ctrl_proj_g_df %>%
+    transmute(drug = gene, method = "ProjectCor (GSVA)", jacc = jacc_TRUE, NES = NES_TRUE)
+)
+
+plot_long <- plot_df %>%
+  dplyr::rename(Jaccard = jacc) %>%
+  pivot_longer(c(Jaccard, NES), names_to = "metric", values_to = "value")
+
+saveRDS(plot_long, file.path(RESULTS_PATH, "drugmatrix/ctrl_unpaired_plot_df.rds"))
+
+summary_df <- bind_rows(
+  summarize_method(drugmatrix_ctrl_mean_df, "Mean"),
+  summarize_method(drugmatrix_ctrl_net_df, "NetworkProp"),
+  summarize_method(drugmatrix_ctrl_proj_e_df, "ProjectCor (Eigen)"),
+  summarize_method(drugmatrix_ctrl_proj_g_df, "ProjectCor (GSVA)")
+)
+saveRDS(summary_df, file.path(RESULTS_PATH, "drugmatrix/ctrl_paired_plot_df.rds"))
+```
+```{r}
+baseline_means <- plot_long %>%
+  filter(method == "No change") %>%
+  group_by(metric) %>%
+  summarise(yintercept = median(value), .groups = "drop")
+
+ggplot(plot_long, aes(method, value, fill = method)) +
+
+  geom_violin(
+    width = 0.9,
+    alpha = 0.35,
+    color = NA
+  ) +
+
+  ggbeeswarm::geom_beeswarm(
+    size = 0.1,
+    alpha = 0.7,
+    cex = 0.7
+  ) +
+
+  stat_summary(
+    fun = median,
+    geom = "point",
+    shape = 21,
+    size = 3,
+    fill = "white"
+  ) +
+
+  geom_hline(
+    data = baseline_means,
+    aes(yintercept = yintercept),
+    linetype = "dotted",
+    color = "grey50",
+    linewidth = 0.8
+  ) +
+
+  facet_wrap(
+    ~metric,
+    scales = "free_y"
+  ) +
+
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("No change", "Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)")) + 
+  labs(
+    x = "",
+    y = "Score"
+  ) +
+
+  theme_classic(base_size = 15) +
+
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1),
+    legend.position = "none",
+    strip.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_ctrl_unpaired.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
+
+### Paired
+
+#### Swarm
+```{r}
+plot_df <- bind_rows(
+  drugmatrix_ctrl_mean_df %>%
+    transmute(drug = gene, method = "Mean", jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+
+  drugmatrix_ctrl_net_df %>%
+    transmute(drug = gene, method = "NetworkProp", jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+
+  drugmatrix_ctrl_proj_e_df %>%
+    transmute(drug = gene, method = "ProjectCor (Eigen)", jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+
+  drugmatrix_ctrl_proj_g_df %>%
+    transmute(drug = gene, method = "ProjectCor (GSVA)", jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE)
+)
+
+plot_long <- plot_df %>%
+  rename(`Jaccard ∆` = jacc_delta, `NES ∆` = NES_delta) %>%
+  pivot_longer(c(`Jaccard ∆`, `NES ∆`), names_to = "metric", values_to = "value")
+
+saveRDS(plot_long, file.path(RESULTS_PATH, "drugmatrix/ctrl_paired_swarm_plot_df.rds"))
+```
+
+
+```{r}
+ggplot(plot_long, aes(method, value, fill = method)) +
+
+  geom_violin(
+    width = 0.9,
+    alpha = 0.35,
+    color = NA
+  ) +
+
+  ggbeeswarm::geom_beeswarm(
+    size = 0.1,
+    alpha = 0.7,
+    cex = 0.7
+  ) +
+
+  stat_summary(
+    fun = median,
+    geom = "point",
+    shape = 21,
+    size = 3,
+    fill = "white"
+  ) +
+
+  geom_hline(
+    yintercept = 0,
+    linetype = "dotted",
+    color = "grey50",
+    linewidth = 0.8
+  ) +
+
+  facet_wrap(
+    ~metric,
+    scales = "free_y"
+  ) +
+
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)")) + 
+
+  labs(
+    x = "",
+    y = "Score"
+  ) +
+
+  theme_classic(base_size = 15) +
+
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1),
+    legend.position = "none",
+    strip.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_ctrl_paired_swarm.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
+
+#### Dot Plot
+```{r}
+ggplot(summary_df,
+       aes(x = -log10(fisher_p),
+           y = method,
+           size = prop,
+           color = -log10(fisher_p))) +
+
+  geom_point(alpha = 0.9) +
+
+  facet_wrap(~metric) +
+  coord_cartesian(xlim = c(-0.02, 0.125)) +
+  scale_color_viridis_c(
+    name = "-log10(meta p)",
+    option = "A"
+  ) +
+
+  scale_size(
+    range = c(3,10),
+    name = "Fraction improved"
+  ) +
+
+  labs(
+    x = "-log10 Fisher meta‑p",
+    y=""
+  ) +
+
+  theme_classic(base_size = 15) +
+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.spacing = unit(2, "lines"),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_ctrl_paired.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
+
+## 10th Results {.tabset}
+```{r}
+drugmatrix_no_change_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/no_change_eval_table.rds"))
+drugmatrix_ctrl_mean_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_10th_mean_eval_table.rds"))
+drugmatrix_ctrl_net_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_10th_networkprop_eval_table.rds"))
+drugmatrix_ctrl_proj_e_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/10th_projectcor_eigen_eval_table.rds"))
+drugmatrix_ctrl_proj_g_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/10th_projectcor_gsva_eval_table.rds"))
+```
+
+```{r}
+plot_df <- bind_rows(
+  drugmatrix_no_change_df %>%
+    transmute(drug = gene, method = "No change", jacc, NES),
+
+  drugmatrix_ctrl_mean_df %>%
+    transmute(drug = gene, method = "Mean", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  drugmatrix_ctrl_net_df %>%
+    transmute(drug = gene, method = "NetworkProp", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  drugmatrix_ctrl_proj_e_df %>%
+    transmute(drug = gene, method = "ProjectCor (Eigen)", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  drugmatrix_ctrl_proj_g_df %>%
+    transmute(drug = gene, method = "ProjectCor (GSVA)", jacc = jacc_TRUE, NES = NES_TRUE)
+)
+
+plot_long <- plot_df %>%
+  dplyr::rename(Jaccard = jacc) %>%
+  dplyr::group_by(drug, method) %>%
+  dplyr::summarise_all(mean) %>% 
+  dplyr::ungroup() %>%
+  pivot_longer(c(Jaccard, NES), names_to = "metric", values_to = "value")
+
+saveRDS(plot_long, file.path(RESULTS_PATH, "drugmatrix/ctrl_10th_unpaired_plot_df.rds"))
+
+summary_df <- bind_rows(
+  summarize_method(drugmatrix_ctrl_mean_df, "Mean"),
+  summarize_method(drugmatrix_ctrl_net_df, "NetworkProp"),
+  summarize_method(drugmatrix_ctrl_proj_e_df, "ProjectCor (Eigen)"),
+  summarize_method(drugmatrix_ctrl_proj_g_df, "ProjectCor (GSVA)")
+)
+saveRDS(summary_df, file.path(RESULTS_PATH, "drugmatrix/ctrl_10th_paired_plot_df.rds"))
+```
+
+### Unpaired
+```{r}
+baseline_means <- plot_long %>%
+  filter(method == "No change") %>%
+  group_by(metric) %>%
+  summarise(yintercept = median(value), .groups = "drop")
+
+ggplot(plot_long, aes(method, value, fill = method)) +
+
+  geom_violin(
+    width = 0.9,
+    alpha = 0.35,
+    color = NA
+  ) +
+
+  ggbeeswarm::geom_beeswarm(
+    size = 0.1,
+    alpha = 0.7,
+    cex = 0.7
+  ) +
+
+  stat_summary(
+    fun = median,
+    geom = "point",
+    shape = 21,
+    size = 3,
+    fill = "white"
+  ) +
+
+  geom_hline(
+    data = baseline_means,
+    aes(yintercept = yintercept),
+    linetype = "dotted",
+    color = "grey50",
+    linewidth = 0.8
+  ) +
+
+  facet_wrap(
+    ~metric,
+    scales = "free_y"
+  ) +
+
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("No change", "Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)")) + 
+  labs(
+    x = "",
+    y = "Score"
+  ) +
+
+  theme_classic(base_size = 15) +
+
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1),
+    legend.position = "none",
+    strip.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold")
+  )
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_10th_unpaired.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
+
+### Paired
+```{r}
+ggplot(summary_df,
+       aes(x = -log10(fisher_p),
+           y = method,
+           size = prop,
+           color = -log10(fisher_p))) +
+
+  geom_point(alpha = 0.9) +
+
+  facet_wrap(~metric) +
+  coord_cartesian(xlim = c(-0.6, 4.5)) +
+  scale_color_viridis_c(
+    name = "-log10(meta p)",
+    option = "A"
+  ) +
+
+  scale_size(
+    range = c(3,10),
+    name = "Fraction Improved"
+  ) +
+
+  labs(
+    x = "-log10 Fisher meta‑p",
+    y=""
+  ) +
+
+  theme_classic(base_size = 15) +
+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.spacing = unit(2, "lines"),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_10th_paired.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
+
+## 90th Results {.tabset}
+```{r}
+drugmatrix_no_change_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/no_change_eval_table.rds"))
+drugmatrix_ctrl_mean_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_90th_mean_eval_table.rds"))
+drugmatrix_ctrl_net_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_90th_networkprop_eval_table.rds"))
+drugmatrix_ctrl_proj_e_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/90th_projectcor_eigen_eval_table.rds"))
+drugmatrix_ctrl_proj_g_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/90th_projectcor_gsva_eval_table.rds"))
+```
+
+```{r}
+plot_df <- bind_rows(
+  drugmatrix_no_change_df %>%
+    transmute(drug = gene, method = "No change", jacc, NES),
+
+  drugmatrix_ctrl_mean_df %>%
+    transmute(drug = gene, method = "Mean", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  drugmatrix_ctrl_net_df %>%
+    transmute(drug = gene, method = "NetworkProp", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  drugmatrix_ctrl_proj_e_df %>%
+    transmute(drug = gene, method = "ProjectCor (Eigen)", jacc = jacc_TRUE, NES = NES_TRUE),
+
+  drugmatrix_ctrl_proj_g_df %>%
+    transmute(drug = gene, method = "ProjectCor (GSVA)", jacc = jacc_TRUE, NES = NES_TRUE)
+)
+
+plot_long <- plot_df %>%
+  dplyr::rename(Jaccard = jacc) %>%
+  dplyr::group_by(drug, method) %>%
+  dplyr::summarise_all(mean) %>% 
+  dplyr::ungroup() %>%
+  pivot_longer(c(Jaccard, NES), names_to = "metric", values_to = "value")
+
+saveRDS(plot_long, file.path(RESULTS_PATH, "drugmatrix/ctrl_90th_unpaired_plot_df.rds"))
+
+summary_df <- bind_rows(
+  summarize_method(drugmatrix_ctrl_mean_df, "Mean"),
+  summarize_method(drugmatrix_ctrl_net_df, "NetworkProp"),
+  summarize_method(drugmatrix_ctrl_proj_e_df, "ProjectCor (Eigen)"),
+  summarize_method(drugmatrix_ctrl_proj_g_df, "ProjectCor (GSVA)")
+)
+saveRDS(summary_df, file.path(RESULTS_PATH, "drugmatrix/ctrl_90th_paired_plot_df.rds"))
+```
+
+### Unpaired
+```{r}
+baseline_means <- plot_long %>%
+  filter(method == "No change") %>%
+  group_by(metric) %>%
+  summarise(yintercept = median(value), .groups = "drop")
+
+ggplot(plot_long, aes(method, value, fill = method)) +
+
+  geom_violin(
+    width = 0.9,
+    alpha = 0.35,
+    color = NA
+  ) +
+
+  ggbeeswarm::geom_beeswarm(
+    size = 0.1,
+    alpha = 0.7,
+    cex = 0.7
+  ) +
+
+  stat_summary(
+    fun = median,
+    geom = "point",
+    shape = 21,
+    size = 3,
+    fill = "white"
+  ) +
+
+  geom_hline(
+    data = baseline_means,
+    aes(yintercept = yintercept),
+    linetype = "dotted",
+    color = "grey50",
+    linewidth = 0.8
+  ) +
+
+  facet_wrap(
+    ~metric,
+    scales = "free_y"
+  ) +
+
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("No change", "Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)")) + 
+  labs(
+    x = "",
+    y = "Score"
+  ) +
+
+  theme_classic(base_size = 15) +
+
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1),
+    legend.position = "none",
+    strip.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold")
+  )
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_90th_unpaired.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
+
+### Paired
+```{r}
+ggplot(summary_df,
+       aes(x = -log10(fisher_p),
+           y = method,
+           size = prop,
+           color = -log10(fisher_p))) +
+
+  geom_point(alpha = 0.9) +
+
+  facet_wrap(~metric) +
+  coord_cartesian(xlim = c(-0.2, 7.5)) +
+  scale_color_viridis_c(
+    name = "-log10(meta p)",
+    option = "A"
+  ) +
+
+  scale_size(
+    range = c(3,10),
+    name = "Fraction Improved"
+  ) +
+
+  labs(
+    x = "-log10 Fisher meta‑p",
+    y=""
+  ) +
+
+  theme_classic(base_size = 15) +
+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.spacing = unit(2, "lines"),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_90th_paired.png"),
+  width = 8,
+  height = 5,
+  dpi = 400
+)
+```
