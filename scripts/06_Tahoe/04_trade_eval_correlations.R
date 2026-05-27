@@ -141,7 +141,7 @@ if (sys.nframe() == 0) {
   run_trade_eval_correlations(
     eval_paths = eval_paths,
     de_rds = default_arg(args, "source-de-rds", file.path(project_path, "data/tahoe/tahoe_deseq_dfs.rds")),
-    output_dir = default_arg(args, "output-dir", file.path(project_path, "results/eval/tahoe/trade_metric_correlations/projectCor")),
+    output_dir = default_arg(args, "output-dir", file.path(project_path, "results/plots/trade_metric_correlations/tahoe_projectCor")),
     source_cell_line = default_arg(args, "source-cell-line", "NCI-H23"),
     n_sample = if (is.null(args[["n-sample"]])) NULL else as.integer(args[["n-sample"]])
   )
