@@ -17,6 +17,17 @@ drug_splits <- read.csv(file.path(PATH,"data/sigs/tahoe/drug_splits.csv"))
 combined_no_recon_df <- readRDS(
   file.path(PATH,"results/eval/tahoe/no_change_eval_table.rds")
 )
+# Fix this, upper case, not overlapping with tahoe_sigs names
+combined_no_recon_df$target <- with(combined_no_recon_df, 
+                                    case_when(target == "a498" ~ "A498",
+                                              target == "hct15" ~ "HCT15",
+                                              target == "hec1a" ~ "HEC-1-A",
+                                              target == "lovo" ~ "LoVo",
+                                              target == "mia_paca2" ~ "MIA PaCa-2",
+                                              target == "panc_0327" ~ "Panc 03.27",
+                                              target == "snu1" ~ "SNU-1",
+                                              target == "snu423" ~ "SNU-423",
+                                              target == "sw48" ~ "SW48"))
 
 # ------------------------------------------------
 # Signatures
@@ -90,9 +101,9 @@ run_eval_parallel <- function(regime, score){
   }
   
   combined_aggregated_df <- merge(
-    combined_no_recon_df %>% dplyr::select(source,gene,NES,jacc),
+    combined_no_recon_df %>% dplyr::select(source,target,gene,NES,jacc),
     combined_df %>% mutate(kept_alpha = kept/(kept+displaced)),
-    by=c("source","gene"),
+    by=c("source","target","gene"),
     suffixes=c("_FALSE","_TRUE")
   ) %>% tibble()
   

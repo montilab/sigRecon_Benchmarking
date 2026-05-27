@@ -60,7 +60,7 @@ all_eval_no_change_table$source <- if_else(all_eval_no_change_table$source == "k
 # ------------------------------------------------
 # 3. 1/10th experiment
 # ------------------------------------------------
-do_save <- TRUE
+do_save <- FALSE
 # None of the genes reach significance after stack generation which is why alpha = 1
 if(do_save) {
   rpe1_paths <- Sys.glob(file.path(RECON_PATH,
