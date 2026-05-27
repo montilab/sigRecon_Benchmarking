@@ -16,7 +16,7 @@ EVAL_PATH <- file.path(PROJECT_PATH, "results/eval/tahoe")
 metadata_path <- file.path(Sys.getenv("AGED"), 
                            "CBMrepositoryData/perturbational_data/tahoe/metadata/drug_metadata.parquet")
 
-output_dir <- file.path(EVAL_PATH, "projectCor_moa_delta_plots")
+output_dir <- file.path(PROJECT_PATH, "results/plots/tahoe_projectCor_moa_delta_plots")
 
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -85,7 +85,7 @@ plot_moa_delta <- function(df, score_name) {
       n_eval_rows = n(),
       .groups = "drop"
     ) |>
-    group_by(regime, target, moa) |>
+    group_by(regime, target) |>
     ungroup() |>
     mutate(regime = factor(regime, levels = regime_order))
   

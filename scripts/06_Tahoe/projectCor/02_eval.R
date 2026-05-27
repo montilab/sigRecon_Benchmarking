@@ -111,7 +111,7 @@ run_eval_parallel <- function(regime, score){
     combined_aggregated_df,
     file.path(
       SAVE_PATH,
-      paste0(regime,"_projectcor_",score,".rds")
+      paste0(regime,"_projectcor_",score,"_eval_table.rds")
     )
   )
   

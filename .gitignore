@@ -1,5 +1,5 @@
 data/
-results/
+results/plots/*
 sigrecon/
 scripts/archive
 scripts/*/archive
