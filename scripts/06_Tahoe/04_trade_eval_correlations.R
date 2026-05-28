@@ -16,8 +16,6 @@ parse_cli_args <- function(args = commandArgs(trailingOnly = TRUE)) {
   out
 }
 
-split_arg <- function(x) if (is.null(x) || identical(x, "")) character(0) else str_split(x, ",", simplify = FALSE)[[1]] |> str_trim() |> discard(~ .x == "")
-
 normalize_context <- function(x) str_to_lower(str_replace_all(x, "[^[:alnum:]]", ""))
 
 clean_label <- function(path) tools::file_path_sans_ext(basename(path)) |> str_replace_all("[^[:alnum:]_\\-]+", "_")
@@ -109,20 +107,21 @@ plot_scatter <- function(df, x_col, y_col, target_col, title, subtitle, out_file
 
 run_trade_eval_correlations <- function(eval_paths, de_rds, output_dir, source_cell_line = "NCI-H23", n_sample = NULL) {
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-  trade_metrics <- compute_trade_metrics(de_rds, n_sample = n_sample)
-  saveRDS(trade_metrics, file.path(output_dir, "context_trade_metrics.rds"))
+  # trade_metrics <- compute_trade_metrics(de_rds, n_sample = n_sample)
+  # saveRDS(trade_metrics, file.path(output_dir, "context_trade_metrics.rds"))
+  trade_metrics <- readRDS(file.path(output_dir, "context_trade_metrics.rds"))
   all_cor <- list()
   for (eval_path in eval_paths) {
     label <- clean_label(eval_path); message("Processing eval table: ", eval_path)
     joined <- readRDS(eval_path) |> as_tibble() |> add_trade_deltas(trade_metrics, source_cell_line)
     saveRDS(joined, file.path(output_dir, paste0(label, "_trade_joined.rds")))
-    for (x_col in c("delta_TI", "delta_pi_DEG")) for (y_col in c("delta_NES", "delta_jacc")) {
+    for (x_col in c("delta_TI", "source_TI", "target_TI")) for (y_col in c("delta_NES")) {
       pooled <- spearman_summary(joined, x_col, y_col) |> mutate(eval_table = label, x_metric = x_col, y_metric = y_col, scope = "pooled", .before = 1)
       by_target <- spearman_summary(joined, x_col, y_col, "target") |> mutate(eval_table = label, x_metric = x_col, y_metric = y_col, scope = "by_target", .before = 1)
       all_cor[[length(all_cor) + 1]] <- bind_rows(pooled, by_target)
       subtitle <- sprintf("Spearman rho = %.3f, p = %.3g, n = %s", pooled$rho, pooled$p_value, pooled$n)
       base <- file.path(output_dir, paste0(label, "_", x_col, "_vs_", y_col))
-      plot_scatter(joined, x_col, y_col, "target", paste(label, x_col, "vs", y_col), subtitle, paste0(base, "_pooled.png"))
+      # plot_scatter(joined, x_col, y_col, "target", paste(label, x_col, "vs", y_col), subtitle, paste0(base, "_pooled.png"))
       plot_scatter(joined, x_col, y_col, "target", paste(label, x_col, "vs", y_col), "Faceted by target cell line", paste0(base, "_by_target.png"), TRUE)
     }
   }
@@ -135,8 +134,8 @@ if (sys.nframe() == 0) {
   project_path <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon")
   args <- parse_cli_args()
   eval_dir <- default_arg(args, "eval-dir", file.path(project_path, "results/eval/tahoe"))
-  eval_pattern <- default_arg(args, "eval-pattern", "^(ctrl|10th|90th)_projectcor_(gsva|eigen)\\.rds$")
-  eval_paths <- split_arg(args[["eval-rds"]])
+  eval_pattern <- default_arg(args, "eval-pattern", "*_projectcor_*.rds")
+  eval_paths <- Sys.glob(file.path(eval_dir, eval_pattern))
   if (length(eval_paths) == 0) eval_paths <- list.files(eval_dir, pattern = eval_pattern, full.names = TRUE)
   run_trade_eval_correlations(
     eval_paths = eval_paths,
