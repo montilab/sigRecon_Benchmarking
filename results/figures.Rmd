@@ -21,8 +21,8 @@ library(arrow)
 library(ComplexHeatmap)
 library(circlize)
 
-PROJECT_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon/")
-RESULTS_PATH <- file.path(PROJECT_PATH, "results/eval/")
+PROJECT_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon")
+RESULTS_PATH <- file.path(PROJECT_PATH, "results/eval")
 ```
 
 ```{r}
@@ -135,7 +135,7 @@ tahoe_moa_delta_joined_df <- pmap_dfr(
       levels = c("Mean", "NetworkProp", "ProjectCor (Eigen)",
                  "ProjectCor (GSVA)", "Orthos", "Stack")
     ),
-    regime = factor(regime, levels = c("ctrl", "10th", "90th")),
+    regime = factor(regime, levels = c("90th", "10th", "ctrl")),
     drug_key = normalize_drug_name(gene)
   ) %>%
   left_join(tahoe_drug_metadata, by = "drug_key")
@@ -161,6 +161,7 @@ saveRDS(
 
 ```{r, fig.width=14, fig.height=10}
 moa_order <- tahoe_moa_delta_df %>%
+  filter(regime == "90th") %>%
   group_by(`moa-fine`) %>%
   summarise(median_delta_NES = median(delta_NES, na.rm = TRUE), .groups = "drop") %>%
   arrange(desc(median_delta_NES)) %>%
@@ -169,36 +170,35 @@ moa_order <- tahoe_moa_delta_df %>%
 ggplot(
   tahoe_moa_delta_df %>%
     mutate(`moa-fine` = factor(`moa-fine`, levels = rev(moa_order))),
-  aes(x = `moa-fine`, y = delta_NES, fill = method)
+  aes(x = `moa-fine`, y = delta_NES)
 ) +
   geom_hline(yintercept = 0, color = "grey70", linewidth = 0.35) +
   geom_boxplot(
+    aes(fill = regime),
     outlier.shape = NA,
     alpha = 0.65,
-    width = 0.55,
-    position = position_dodge(width = 0.75)
+    width = 0.55
   ) +
   ggbeeswarm::geom_quasirandom(
-    aes(color = method, group = method),
+    aes(color = method, group = `moa-fine`),
     width = 0.18,
     size = 0.35,
-    alpha = 0.25,
-    dodge.width = 0.75
+    alpha = 0.25
   ) +
   facet_grid(. ~ regime) +
   coord_flip() +
+  scale_fill_brewer(palette = "Pastel1", guide = "none") +
   scale_x_discrete(labels = function(x) str_wrap(x, width = 28), drop = FALSE) +
   labs(
     x = NULL,
     y = "Delta NES",
-    fill = "Method",
     color = "Method"
   ) +
   theme_bw(base_size = 12) +
   theme(
     panel.grid.minor = element_blank(),
     axis.title.y = element_blank(),
-    legend.position = "bottom"
+    legend.position = "right"
   )
 ```
 
@@ -255,8 +255,16 @@ plot_gain_heatmap <- function(gain_df, comparison_name, title) {
     cluster_columns = TRUE,
     row_split = row_group,
     cluster_row_slices = FALSE,
+    row_names_side = "left",
+    column_names_rot = 45,
     column_title = title,
     row_title = NULL,
+    cell_fun = function(j, i, x, y, width, height, fill) {
+      value <- gain_mat[i, j]
+      if (is.finite(value)) {
+        grid::grid.text(sprintf("%.2f", value), x, y, gp = grid::gpar(fontsize = 8))
+      }
+    },
     heatmap_legend_param = list(title = "Median\nDelta NES gain")
   )
 }
