@@ -112,6 +112,7 @@ tahoe_eval_specs <- tribble(
   filter(file.exists(path))
 
 read_tahoe_eval <- function(path, method, regime) {
+  print(path)
   readRDS(path) %>%
     as_tibble() %>%
     transmute(
@@ -129,13 +130,14 @@ tahoe_moa_delta_joined_df <- pmap_dfr(
   tahoe_eval_specs %>% select(path, method, regime),
   read_tahoe_eval
 ) %>%
+  mutate(regime = if_else(regime == "ctrl", "Control", regime)) %>% 
   mutate(
     method = factor(
       method,
       levels = c("Mean", "NetworkProp", "ProjectCor (Eigen)",
                  "ProjectCor (GSVA)", "Orthos", "Stack")
     ),
-    regime = factor(regime, levels = c("90th", "10th", "ctrl")),
+    regime = factor(regime, levels = c("90th", "10th", "Control")),
     drug_key = normalize_drug_name(gene)
   ) %>%
   left_join(tahoe_drug_metadata, by = "drug_key")
@@ -182,7 +184,7 @@ ggplot(
   ggbeeswarm::geom_quasirandom(
     aes(color = method, group = `moa-fine`),
     width = 0.18,
-    size = 0.35,
+    size = 0.6,
     alpha = 0.25
   ) +
   facet_grid(. ~ regime) +
@@ -198,7 +200,11 @@ ggplot(
   theme(
     panel.grid.minor = element_blank(),
     axis.title.y = element_blank(),
-    legend.position = "right"
+    legend.position = "right",
+    legend.text = element_text(size = 12),  
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14),
+    strip.text = element_text(size = 14)
   )
 ```
 
@@ -217,8 +223,8 @@ tahoe_moa_gain_df <- tahoe_moa_delta_df %>%
   select(method, regime, gene, target, `moa-fine`, delta_NES) %>%
   pivot_wider(names_from = regime, values_from = delta_NES) %>%
   mutate(
-    gain_10th = `10th` - ctrl,
-    gain_90th = `90th` - ctrl
+    gain_10th = `10th` - Control,
+    gain_90th = `90th` - Control
   ) %>%
   pivot_longer(
     c(gain_10th, gain_90th),
@@ -252,6 +258,8 @@ plot_gain_heatmap <- function(gain_df, comparison_name, title) {
     col = circlize::colorRamp2(c(-max_abs, 0, max_abs), c("#3b4cc0", "white", "#b40426")),
     na_col = "grey90",
     cluster_rows = TRUE,
+    show_row_dend = FALSE,
+    show_column_dend = FALSE,
     cluster_columns = TRUE,
     row_split = row_group,
     cluster_row_slices = FALSE,
@@ -262,7 +270,7 @@ plot_gain_heatmap <- function(gain_df, comparison_name, title) {
     cell_fun = function(j, i, x, y, width, height, fill) {
       value <- gain_mat[i, j]
       if (is.finite(value)) {
-        grid::grid.text(sprintf("%.2f", value), x, y, gp = grid::gpar(fontsize = 8))
+        grid::grid.text(sprintf("%.2f", value), x, y, gp = grid::gpar(fontsize = 11))
       }
     },
     heatmap_legend_param = list(title = "Median\nDelta NES gain")
