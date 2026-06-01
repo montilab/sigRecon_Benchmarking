@@ -196,15 +196,15 @@ ggplot(
     y = "Delta NES",
     color = "Method"
   ) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = 18) +
   theme(
     panel.grid.minor = element_blank(),
     axis.title.y = element_blank(),
     legend.position = "right",
-    legend.text = element_text(size = 12),  
-    legend.title = element_text(size = 14),
-    axis.text = element_text(size = 14),
-    strip.text = element_text(size = 14)
+    legend.text = element_text(size = 15),  
+    legend.title = element_text(size = 18),
+    axis.text = element_text(size = 18),
+    strip.text = element_text(size = 18)
   )
 ```
 
@@ -264,16 +264,21 @@ plot_gain_heatmap <- function(gain_df, comparison_name, title) {
     row_split = row_group,
     cluster_row_slices = FALSE,
     row_names_side = "left",
+    row_names_gp = gpar(fontsize = 17), 
     column_names_rot = 45,
+    column_names_gp = gpar(fontsize = 17), 
     column_title = title,
+    column_title_gp = gpar(fontsize = 17, fontface = "bold"), 
     row_title = NULL,
     cell_fun = function(j, i, x, y, width, height, fill) {
       value <- gain_mat[i, j]
       if (is.finite(value)) {
-        grid::grid.text(sprintf("%.2f", value), x, y, gp = grid::gpar(fontsize = 11))
+        grid::grid.text(sprintf("%.2f", value), x, y, gp = grid::gpar(fontsize = 14))
       }
     },
-    heatmap_legend_param = list(title = "Median\nDelta NES gain")
+    heatmap_legend_param = list(title = "Median\nDelta NES",
+                                title_gp = gpar(fontsize = 16, fontface = "bold"),
+                                labels_gp = gpar(fontsize = 15, col = "black"))
   )
 }
 

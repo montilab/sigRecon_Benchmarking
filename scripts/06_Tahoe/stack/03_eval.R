@@ -31,6 +31,15 @@ all_eval_table <- foreach(
   
   pred_sigs <- readRDS(target_sig_path)
   
+  normalize_drug_name <- function(x) {
+    if(str_detect(x, pattern = "Glycyrrhetinic")){
+      x <- "18β-Glycyrrhetinic acid"
+    }
+    x <- gsub("_", " ", x)            # underscores -> spaces
+    return(x)
+  }
+  
+ 
   cell_line <- str_match(basename(target_sig_path),
                          "^tahoe_(.*?)_")[,2]
   cell_line <- str_replace_all(cell_line, "-", "")
@@ -40,6 +49,8 @@ all_eval_table <- foreach(
   message("Processing ", cell_line)
   
   if(split_type == "ctrl"){
+    
+    names(pred_sigs) <- mapply(normalize_drug_name, names(pred_sigs))
     
     eval_tbl <- sig_eval_table(
       source_sigs = lapply(nci_sig, function (x) x$up),
@@ -52,9 +63,16 @@ all_eval_table <- foreach(
     
   } else {
     
+    pred_sigs_renamed <- list()
+    for(split in names(pred_sigs)) {
+      drug_split <- pred_sigs[[split]]
+      names(drug_split) <- mapply(normalize_drug_name, names(drug_split))
+      pred_sigs_renamed[[split]] <- drug_split
+    }
+    
     eval_tbl <- sig_eval_table(
       source_sigs = lapply(nci_sig, function (x) x$up),
-      pred_sigs   = lapply(pred_sigs, function (x) lapply(x, function (y) y$up)),
+      pred_sigs   = lapply(pred_sigs_renamed, function (x) lapply(x, function (y) y$up)),
       true_sigs   = nci_sig,
       source      = paste0("nci_h23_", cell_line),
       splits = TRUE,

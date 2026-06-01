@@ -40,13 +40,9 @@ if(do_save) {
   combined_no_recon_df <- foreach(sig_name = names(tahoe_sigs), .combine = rbind) %do% {
     print(sig_name)
     sig <- tahoe_sigs[[sig_name]]
-    
-    # # Need to find shared drugs because source may have more drugs that pass filtering
-    # shared_drugs <- intersect(names(source_sig), names(sig))
-    # sig <- sig[shared_drugs]
-    # nci_h23_sig <- source_sig[shared_drugs]
-    recon_eval_table <- sig_eval_table(source_sigs = nci_h23_sig,
-                                       pred_sigs = nci_h23_sig,
+  
+    recon_eval_table <- sig_eval_table(source_sigs = source_sig,
+                                       pred_sigs = source_sig,
                                        true_sigs = sig,
                                        source = "nci_h23",
                                        target = sig_name)
