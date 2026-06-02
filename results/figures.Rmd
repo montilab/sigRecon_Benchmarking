@@ -92,8 +92,8 @@ clean_moa_fine_label <- function(x) {
 clean_moa_broad_label <- function(x) {
   recode(
     x,
-    "activator/agonist" = "Activator\nAgonist",
-    "inhibitor/antagonist" = "Inhibitor\nAntagonist"
+    "activator/agonist" = "Activator/\nAgonist",
+    "inhibitor/antagonist" = "Inhibitor/\nAntagonist"
   )
 }
 
@@ -176,7 +176,7 @@ tahoe_moa_delta_df <- tahoe_moa_delta_joined_df %>%
   mutate(
     moa_broad_group = factor(
       clean_moa_broad_label(`moa-broad`),
-      levels = c("Inhibitor\nAntagonist", "Activator\nAgonist")
+      levels = c("Inhibitor/\nAntagonist", "Activator/\nAgonist")
     ),
     moa_fine_label = clean_moa_fine_label(`moa-fine`)
   )
@@ -197,8 +197,8 @@ moa_order <- tahoe_moa_delta_df %>%
   summarise(moa_fine_label = list(moa_fine_label), .groups = "drop")
 
 moa_levels <- c(
-  rev(moa_order$moa_fine_label[[which(moa_order$moa_broad_group == "Activator\nAgonist")]]),
-  rev(moa_order$moa_fine_label[[which(moa_order$moa_broad_group == "Inhibitor\nAntagonist")]])
+  rev(moa_order$moa_fine_label[[which(moa_order$moa_broad_group == "Activator/\nAgonist")]]),
+  rev(moa_order$moa_fine_label[[which(moa_order$moa_broad_group == "Inhibitor/\nAntagonist")]])
 )
 
 ggplot(
@@ -289,7 +289,7 @@ plot_gain_heatmap <- function(gain_df, comparison_name, title) {
     arrange(moa_broad_group, moa_fine_label)
   
   row_group <- gain_wide$moa_broad_group
-  row_group <- factor(row_group, levels = c("Inhibitor\nAntagonist", "Activator\nAgonist"))
+  row_group <- factor(row_group, levels = c("Inhibitor/\nAntagonist", "Activator/\nAgonist"))
   gain_mat <- gain_wide %>%
     select(-moa_broad_group) %>%
     column_to_rownames("moa_fine_label") %>%
@@ -307,6 +307,7 @@ plot_gain_heatmap <- function(gain_df, comparison_name, title) {
     show_column_dend = FALSE,
     cluster_columns = TRUE,
     row_split = row_group,
+    row_gap = unit(5, "mm"),
     cluster_row_slices = FALSE,
     row_names_side = "right",
     row_names_gp = gpar(fontsize = 17), 
@@ -357,100 +358,7 @@ dev.off()
 
 ## MOA TI Quadrant Scatter
 ```{r}
-trade_one_for_figures <- function(tbl, n_sample = NULL) {
-  context <- unique(tbl$cell_line)[1]
-  context_key <- unique(tbl$context_key)[1]
-  drug <- unique(tbl$drug)[1]
-  
-  trade_input <- tbl %>%
-    filter(
-      is.finite(log2FoldChange),
-      is.finite(lfcSE),
-      is.finite(pvalue),
-      abs(log2FoldChange) <= 10
-    ) %>%
-    distinct(gene, .keep_all = TRUE) %>%
-    as.data.frame()
-  
-  rownames(trade_input) <- make.unique(as.character(trade_input$gene))
-  
-  failed <- function(msg) {
-    tibble(
-      context = context,
-      context_key = context_key,
-      drug = drug,
-      n_genes_trade = nrow(trade_input),
-      TI = NA_real_,
-      pi_DEG = NA_real_,
-      trade_error = msg
-    )
-  }
-  
-  if (nrow(trade_input) < 10) {
-    return(failed("Fewer than 10 finite genes retained for TRADE"))
-  }
-  
-  out <- tryCatch(
-    TRADEtools::TRADE(
-      mode = "univariate",
-      results1 = trade_input,
-      log2FoldChange = "log2FoldChange",
-      lfcSE = "lfcSE",
-      pvalue = "pvalue",
-      n_sample = n_sample,
-      verbose = FALSE
-    ),
-    error = function(e) e
-  )
-  
-  if (inherits(out, "error")) {
-    return(failed(conditionMessage(out)))
-  }
-  
-  tibble(
-    context = context,
-    context_key = context_key,
-    drug = drug,
-    n_genes_trade = nrow(trade_input),
-    TI = out$distribution_summary$transcriptome_wide_impact,
-    pi_DEG = out$distribution_summary$Me,
-    trade_error = NA_character_
-  )
-}
-
-load_or_compute_tahoe_trade_metrics <- function() {
-  trade_metrics_path <- file.path(
-    PROJECT_PATH,
-    "results/plots/trade_metric_correlations/tahoe_projectCor/context_trade_metrics.rds"
-  )
-  
-  if (file.exists(trade_metrics_path)) {
-    return(readRDS(trade_metrics_path))
-  }
-  
-  if (!requireNamespace("TRADEtools", quietly = TRUE)) {
-    stop(
-      "TRADEtools is required to compute Tahoe TI metrics when context_trade_metrics.rds is absent."
-    )
-  }
-  
-  de_rds <- file.path(PROJECT_PATH, "data/tahoe/tahoe_deseq_dfs.rds")
-  trade_metrics <- readRDS(de_rds) %>%
-    as_tibble() %>%
-    mutate(
-      cell_line = as.character(cell_line),
-      drug = as.character(drug),
-      context_key = normalize_drug_name(cell_line)
-    ) %>%
-    group_split(context_key, drug) %>%
-    map_dfr(trade_one_for_figures)
-  
-  dir.create(dirname(trade_metrics_path), recursive = TRUE, showWarnings = FALSE)
-  saveRDS(trade_metrics, trade_metrics_path)
-  trade_metrics
-}
-
-tahoe_trade_metrics <- load_or_compute_tahoe_trade_metrics()
+tahoe_trade_metrics <- readRDS(file.path(PROJECT_PATH,"results/plots/trade_metric_correlations/tahoe_projectCor/context_trade_metrics.rds"))
 
 tahoe_source_ti <- tahoe_trade_metrics %>%
   filter(context_key == normalize_drug_name("NCI-H23")) %>%
@@ -476,7 +384,7 @@ tahoe_moa_ti_summary_df <- tahoe_moa_ti_df %>%
     is.finite(target_TI),
     is.finite(delta_TI)
   ) %>%
-  group_by(regime, moa_broad_group, moa_fine_label) %>%
+  group_by(regime, moa_broad_group, `moa-fine`, moa_fine_label) %>%
   summarise(
     median_delta_NES = median(delta_NES, na.rm = TRUE),
     median_source_TI = median(source_TI, na.rm = TRUE),
@@ -492,8 +400,15 @@ saveRDS(
 )
 
 plot_moa_ti_quadrant <- function(df, x_col, x_lab, title) {
-  x_mid <- median(df[[x_col]], na.rm = TRUE)
-  y_mid <- median(df$median_delta_NES, na.rm = TRUE)
+  moa_legend_order <- df %>%
+    filter(regime == "90th") %>%
+    arrange(desc(median_delta_NES)) %>%
+    pull(`moa-fine`)
+  moa_legend_order <- c(moa_legend_order, setdiff(unique(df$`moa-fine`), moa_legend_order))
+  
+  plot_df <- df %>%
+    mutate(`moa-fine` = factor(`moa-fine`, levels = moa_legend_order))
+  
   size_breaks <- function(lims) {
     candidates <- c(1, 2, 3, 5, 7, 10, 15, 20, 30, 50)
     candidates[candidates >= ceiling(lims[1]) & candidates <= floor(lims[2])]
@@ -518,12 +433,12 @@ plot_moa_ti_quadrant <- function(df, x_col, x_lab, title) {
     }) %>%
     ungroup()
   
-  ggplot(df, aes(x = .data[[x_col]], y = median_delta_NES)) +
-    geom_vline(xintercept = x_mid, linetype = "dashed", color = "grey55", linewidth = 0.45) +
-    geom_hline(yintercept = y_mid, linetype = "dashed", color = "grey55", linewidth = 0.45) +
+  ggplot(plot_df, aes(x = .data[[x_col]], y = median_delta_NES)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey55", linewidth = 0.45) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey55", linewidth = 0.45) +
     geom_hline(yintercept = 0, color = "grey80", linewidth = 0.35) +
     geom_smooth(method = "lm", se = FALSE, color = "black", linewidth = 0.55) +
-    geom_point(aes(size = n_drugs, fill = moa_fine_label), shape = 21, color = "grey20", alpha = 0.82) +
+    geom_point(aes(size = n_drugs, fill = `moa-fine`), shape = 21, color = "grey20", alpha = 0.82) +
     geom_text(
       data = fit_stats,
       aes(x = Inf, y = Inf, label = label),
@@ -538,7 +453,7 @@ plot_moa_ti_quadrant <- function(df, x_col, x_lab, title) {
       title = title,
       x = x_lab,
       y = "Median delta NES",
-      fill = "MOA fine",
+      fill = "MOA",
       size = "N drugs"
     ) +
     theme_bw(base_size = 16) +
@@ -771,7 +686,7 @@ ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_ctrl_paired.png"),
 ```{r}
 tahoe_no_change_df <- readRDS(file.path(RESULTS_PATH, "tahoe/no_change_eval_table.rds"))
 tahoe_ctrl_mean_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_10th_mean_eval_table.rds"))
-tahoe_ctrl_net_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_10th_networkprop_eval_table.rds"))
+tahoe_ctrl_net_df <- readRDS(file.path(RESULTS_PATH, "tahoe/network_prop_10th_eval_table.rds"))
 tahoe_ctrl_proj_e_df <- readRDS(file.path(RESULTS_PATH, "tahoe/10th_projectcor_eigen_eval_table.rds"))
 tahoe_ctrl_proj_g_df <- readRDS(file.path(RESULTS_PATH, "tahoe/10th_projectcor_gsva_eval_table.rds"))
 ```
@@ -926,7 +841,7 @@ ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_10th_paired.png"),
 ```{r}
 tahoe_no_change_df <- readRDS(file.path(RESULTS_PATH, "tahoe/no_change_eval_table.rds"))
 tahoe_ctrl_mean_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_90th_mean_eval_table.rds"))
-tahoe_ctrl_net_df <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_90th_networkprop_eval_table.rds"))
+tahoe_ctrl_net_df <- readRDS(file.path(RESULTS_PATH, "tahoe/network_prop_90th_eval_table.rds"))
 tahoe_ctrl_proj_e_df <- readRDS(file.path(RESULTS_PATH, "tahoe/90th_projectcor_eigen_eval_table.rds"))
 tahoe_ctrl_proj_g_df <- readRDS(file.path(RESULTS_PATH, "tahoe/90th_projectcor_gsva_eval_table.rds"))
 ```
