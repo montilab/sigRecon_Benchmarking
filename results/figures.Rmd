@@ -201,6 +201,15 @@ moa_levels <- c(
   rev(moa_order$moa_fine_label[[which(moa_order$moa_broad_group == "Inhibitor/\nAntagonist")]])
 )
 
+moa_label_counts <- tahoe_moa_delta_df %>%
+  group_by(moa_fine_label) %>%
+  summarise(n_drugs = n_distinct(gene), .groups = "drop")
+
+format_moa_axis_label <- function(x) {
+  n_drugs <- moa_label_counts$n_drugs[match(x, moa_label_counts$moa_fine_label)]
+  str_wrap(paste0(x, " (", n_drugs, ")"), width = 28)
+}
+
 ggplot(
   tahoe_moa_delta_df %>%
     mutate(moa_fine_label = factor(moa_fine_label, levels = moa_levels)),
@@ -228,7 +237,7 @@ ggplot(
     switch = "y"
   ) +
   scale_fill_brewer(palette = "Pastel1", guide = "none") +
-  scale_y_discrete(labels = function(x) str_wrap(x, width = 28), position = "right") +
+  scale_y_discrete(labels = format_moa_axis_label, position = "right") +
   labs(
     x = "Delta NES",
     y = NULL,
