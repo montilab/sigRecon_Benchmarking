@@ -380,6 +380,77 @@ tahoe_target_ti <- tahoe_trade_metrics %>%
   select(target_key = context_key, drug_key, target_TI = TI) %>%
   distinct(target_key, drug_key, .keep_all = TRUE)
 
+target_keys_to_keep <- tahoe_moa_delta_df %>%
+  distinct(target_key = normalize_drug_name(target)) %>%
+  pull(target_key)
+drug_keys_to_keep <- tahoe_moa_delta_df %>%
+  distinct(drug_key) %>% 
+  pull(drug_key)
+```
+
+```{r}
+source_target_ti_df <- tahoe_target_ti %>%
+  left_join(tahoe_source_ti, by = "drug_key") %>%
+  filter(
+    is.finite(source_TI),
+    is.finite(target_TI),
+    target_key != normalize_drug_name("NCI-H23"),
+    target_key %in% target_keys_to_keep,
+    drug_key %in% drug_keys_to_keep
+  )
+
+ggplot(source_target_ti_df, aes(x = source_TI, y = target_TI)) +
+  geom_abline(slope = 1, intercept = 0, color = "grey70", linewidth = 0.5, linetype = "dashed") +
+  geom_point(aes(fill = target_key), shape = 21, color = "grey20", alpha = 0.75, size = 2.2) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    x = "Source TI (NCI-H23)",
+    y = "Target TI",
+    fill = "Target cell line"
+  ) +
+  theme_bw(base_size = 16) +
+  theme(
+    panel.grid.minor = element_blank(),
+    legend.position = "right"
+  )
+
+```
+
+
+```{r}
+ggsave(
+  file.path(PROJECT_PATH, "results/plots/tahoe_source_target_TI_correlation.png"),
+  width = 10,
+  height = 10,
+  dpi = 400
+)
+```
+```{r}
+drug_order <- source_target_ti_df %>%
+  group_by(drug_key) %>%
+  summarise(median_target_TI = median(target_TI, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(median_target_TI)) %>%
+  summarise(drug_key = list(drug_key), .groups = "drop")
+
+drug_levels <- drug_order$drug_key[[1]]
+ggplot(source_target_ti_df %>%
+    mutate(drug_key = factor(drug_key, levels = drug_levels)), aes(x = source_TI, y = target_TI)) +
+  geom_abline(slope = 1, intercept = 0, color = "grey70", linewidth = 0.5, linetype = "dashed") +
+  geom_point(aes(fill = drug_key), shape = 21, color = "grey20", alpha = 0.75, size = 2.2) +
+  # scale_fill_brewer(palette = "Set2") +
+  labs(
+    x = "Source TI (NCI-H23)",
+    y = "Target TI",
+    fill = "Drug"
+  ) +
+  theme_bw(base_size = 16) +
+  theme(
+    panel.grid.minor = element_blank(),
+    legend.position = "right"
+  )
+```
+
+```{r}
 tahoe_moa_ti_df <- tahoe_moa_delta_df %>%
   mutate(target_key = normalize_drug_name(target)) %>%
   left_join(tahoe_source_ti, by = "drug_key") %>%
