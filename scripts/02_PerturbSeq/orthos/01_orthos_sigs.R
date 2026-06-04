@@ -25,6 +25,7 @@ dir.create(SAVE_PATH, recursive = TRUE, showWarnings = FALSE)
 
 collapse_count_matrix <- function(counts) {
   gene_ids <- as.character(rownames(counts))
+  gene_ids <- stringr::str_trim(gene_ids)
   keep <- !is.na(gene_ids) & gene_ids != ""
   counts <- counts[keep, , drop = FALSE]
   gene_ids <- gene_ids[keep]
@@ -37,7 +38,7 @@ collapse_count_matrix <- function(counts) {
 prepare_lfc_table <- function(lfc_tbl) {
   lfc_tbl %>%
     dplyr::mutate(
-      gene = as.character(gene),
+      gene = stringr::str_trim(as.character(gene)),
       padj_for_score = dplyr::if_else(
         is.na(padj) | padj <= 0,
         .Machine$double.xmin,
@@ -51,7 +52,7 @@ prepare_lfc_table <- function(lfc_tbl) {
     dplyr::ungroup()
 }
 
-lfc_table_to_matrix <- function(lfc_tbl, pbs) {
+lfc_table_to_matrix <- function(lfc_tbl, pbs, genes) {
   wide_tbl <- lfc_tbl %>%
     dplyr::filter(pb %in% pbs) %>%
     dplyr::select(gene, pb, log2FoldChange) %>%
@@ -61,11 +62,21 @@ lfc_table_to_matrix <- function(lfc_tbl, pbs) {
       values_fill = 0
     )
 
-  mat <- wide_tbl %>%
+  observed_mat <- wide_tbl %>%
     tibble::column_to_rownames("gene") %>%
     as.matrix()
 
-  mat[, pbs, drop = FALSE]
+  genes <- unique(genes)
+  mat <- matrix(
+    0,
+    nrow = length(genes),
+    ncol = length(pbs),
+    dimnames = list(genes, pbs)
+  )
+
+  fill_genes <- intersect(rownames(mat), rownames(observed_mat))
+  mat[fill_genes, ] <- observed_mat[fill_genes, pbs, drop = FALSE]
+  mat
 }
 
 make_orthos_signature <- function(residual_vec, limit = 100, min_genes = 5) {
@@ -134,8 +145,11 @@ run_source <- function(source, source_sigs, lfc_tbl_path) {
   }
 
   context_counts <- rowMeans(data$counts[, ctrl_samples, drop = FALSE])
-  MD <- lfc_table_to_matrix(lfc_tbl, pbs)
-  common_genes <- intersect(names(context_counts), rownames(MD))
+  context_genes <- names(context_counts)
+  MD <- lfc_table_to_matrix(lfc_tbl, pbs, genes = context_genes)
+  common_genes <- intersect(context_genes, rownames(MD))
+  message("Source ", source, " has ", length(context_genes), " context genes and ",
+          sum(rowSums(abs(MD)) != 0), " genes with non-zero LFCs.")
 
   if (length(common_genes) < 1000) {
     stop(
