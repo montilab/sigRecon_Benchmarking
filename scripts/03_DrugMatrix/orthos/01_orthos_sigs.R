@@ -15,7 +15,7 @@ SIG_PATH <- file.path(PATH, "data/sigs/drugmatrix")
 TABLE_PATH <- file.path(SIG_PATH, "tables")
 SAVE_PATH <- file.path(SIG_PATH, "orthos")
 
-ORGANISM <- "Human"
+ORGANISM <- "Mouse"
 CONTROL_DOSE <- "0 mg/kg"
 
 dir.create(SAVE_PATH, recursive = TRUE, showWarnings = FALSE)
