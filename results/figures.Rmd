@@ -365,6 +365,138 @@ draw(ht_90th)
 dev.off()
 ```
 
+## MOA Gain Lineplots
+
+### Version 1: Raw delta_NES per regime
+```{r, fig.width=14, fig.height=10}
+# Rebuild per-regime median delta_NES per (method, regime, moa_fine_label)
+tahoe_moa_regime_df <- tahoe_moa_delta_df %>%
+  group_by(method, regime, moa_broad_group, moa_fine_label) %>%
+  summarise(median_delta_NES = median(delta_NES, na.rm = TRUE), .groups = "drop") %>%
+  mutate(regime = factor(regime, levels = c("Control", "10th", "90th")))
+
+# Rank top/bottom 3 drug classes per method based on 90th - ctrl gain
+moa_gain_rank <- tahoe_moa_regime_df %>%
+  pivot_wider(names_from = regime, values_from = median_delta_NES) %>%
+  mutate(gain_90th = `90th` - Control) %>%
+  group_by(method) %>%
+  arrange(method, desc(gain_90th)) %>%
+  mutate(rank = row_number(), n = n()) %>%
+  mutate(highlight = case_when(
+    rank <= 3 ~ "top3",
+    rank > n - 3 ~ "bottom3",
+    TRUE ~ "other"
+  )) %>%
+  ungroup() %>%
+  select(method, moa_fine_label, highlight)
+
+tahoe_moa_regime_plot_df <- tahoe_moa_regime_df %>%
+  left_join(moa_gain_rank, by = c("method", "moa_fine_label"))
+
+highlight_labels_v1 <- tahoe_moa_regime_plot_df %>%
+  filter(highlight != "other", regime == "90th") %>%
+  select(method, moa_fine_label, regime, median_delta_NES, highlight)
+
+ggplot(tahoe_moa_regime_plot_df,
+       aes(x = regime, y = median_delta_NES, group = moa_fine_label)) +
+  geom_line(data = filter(tahoe_moa_regime_plot_df, highlight == "other"),
+            color = "grey80", linewidth = 0.4, alpha = 0.7) +
+  geom_line(data = filter(tahoe_moa_regime_plot_df, highlight == "top3"),
+            aes(color = moa_fine_label), linewidth = 1.2) +
+  geom_line(data = filter(tahoe_moa_regime_plot_df, highlight == "bottom3"),
+            aes(color = moa_fine_label), linewidth = 1.2, linetype = "dashed") +
+  geom_point(data = filter(tahoe_moa_regime_plot_df, highlight != "other"),
+             aes(color = moa_fine_label), size = 2.5) +
+  ggrepel::geom_text_repel(
+    data = highlight_labels_v1,
+    aes(label = moa_fine_label, color = moa_fine_label),
+    size = 3, nudge_x = 0.15, direction = "y", hjust = 0,
+    segment.size = 0.3, show.legend = FALSE
+  ) +
+  facet_wrap(~ method, scales = "free_y") +
+  scale_x_discrete(expand = expansion(mult = c(0.05, 0.35))) +
+  labs(
+    title = "Median delta NES by regime — top/bottom 3 drug classes per method",
+    subtitle = "Solid = top 3 improving (90th − ctrl), dashed = bottom 3 worsening",
+    x = "Regime", y = "Median delta NES", color = "Drug class"
+  ) +
+  theme_bw(base_size = 13) +
+  theme(legend.position = "none", strip.text = element_text(face = "bold"))
+```
+
+```{r}
+ggsave(
+  file.path(PROJECT_PATH, "results/plots/tahoe_moa_gain_lineplot_raw_deltaNES.png"),
+  width = 14, height = 10, dpi = 300
+)
+```
+
+### Version 2: Gain relative to ctrl (0 at ctrl)
+```{r, fig.width=14, fig.height=10}
+tahoe_moa_gain_long_df <- tahoe_moa_regime_df %>%
+  pivot_wider(names_from = regime, values_from = median_delta_NES) %>%
+  mutate(
+    gain_10th = `10th` - Control,
+    gain_90th = `90th` - Control
+  ) %>%
+  pivot_longer(
+    c(gain_10th, gain_90th),
+    names_to = "comparison",
+    values_to = "gain"
+  ) %>%
+  mutate(
+    x_label = recode(comparison, gain_10th = "10th", gain_90th = "90th"),
+    x_label = factor(x_label, levels = c("10th", "90th"))
+  ) %>%
+  bind_rows(
+    distinct(., method, moa_broad_group, moa_fine_label) %>%
+      mutate(x_label = factor("ctrl", levels = c("ctrl", "10th", "90th")), gain = 0)
+  ) %>%
+  mutate(x_label = factor(x_label, levels = c("ctrl", "10th", "90th")))
+
+# Reuse same highlight assignments from Version 1
+tahoe_moa_gain_long_df <- tahoe_moa_gain_long_df %>%
+  left_join(moa_gain_rank, by = c("method", "moa_fine_label"))
+
+highlight_labels_v2 <- tahoe_moa_gain_long_df %>%
+  filter(highlight != "other", x_label == "90th") %>%
+  select(method, moa_fine_label, x_label, gain, highlight)
+
+ggplot(tahoe_moa_gain_long_df,
+       aes(x = x_label, y = gain, group = moa_fine_label)) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50") +
+  geom_line(data = filter(tahoe_moa_gain_long_df, highlight == "other"),
+            color = "grey80", linewidth = 0.4, alpha = 0.7) +
+  geom_line(data = filter(tahoe_moa_gain_long_df, highlight == "top3"),
+            aes(color = moa_fine_label), linewidth = 1.2) +
+  geom_line(data = filter(tahoe_moa_gain_long_df, highlight == "bottom3"),
+            aes(color = moa_fine_label), linewidth = 1.2, linetype = "dashed") +
+  geom_point(data = filter(tahoe_moa_gain_long_df, highlight != "other"),
+             aes(color = moa_fine_label), size = 2.5) +
+  ggrepel::geom_text_repel(
+    data = highlight_labels_v2,
+    aes(label = moa_fine_label, color = moa_fine_label),
+    size = 3, nudge_x = 0.15, direction = "y", hjust = 0,
+    segment.size = 0.3, show.legend = FALSE
+  ) +
+  facet_wrap(~ method, scales = "free_y") +
+  scale_x_discrete(expand = expansion(mult = c(0.05, 0.35))) +
+  labs(
+    title = "Gain in delta NES relative to ctrl — top/bottom 3 drug classes per method",
+    subtitle = "Solid = top 3 improving (90th − ctrl), dashed = bottom 3 worsening; all lines anchored at 0 = ctrl",
+    x = "Regime", y = "Gain (delta NES vs. ctrl)", color = "Drug class"
+  ) +
+  theme_bw(base_size = 13) +
+  theme(legend.position = "none", strip.text = element_text(face = "bold"))
+```
+
+```{r}
+ggsave(
+  file.path(PROJECT_PATH, "results/plots/tahoe_moa_gain_lineplot_relative_to_ctrl.png"),
+  width = 14, height = 10, dpi = 300
+)
+```
+
 ## MOA TI Quadrant Scatter
 ```{r}
 tahoe_trade_metrics <- readRDS(file.path(PROJECT_PATH,"results/plots/trade_metric_correlations/tahoe_projectCor/context_trade_metrics.rds"))
