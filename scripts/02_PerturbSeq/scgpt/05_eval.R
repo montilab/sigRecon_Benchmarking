@@ -3,6 +3,7 @@ library(sigrecon)
 
 PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon")
 DATA_PATH <- file.path(PATH, "data/scgpt/prediction_results/")
+RESULTS_PATH <- file.path(PATH, "results/eval/perturb-seq")
 
 # Loading data
 rpe1_true_sigs <- sigrecon::perturbseq.rpe1
@@ -49,7 +50,7 @@ combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("sour
                                 all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)), 
                                 by = c("source", "gene"), 
                                 suffixes = c("_FALSE", "_TRUE")) %>% tibble
-saveRDS(combined_aggregated_df, file.path(DATA_PATH, "10th_eval_table.rds"))
+saveRDS(combined_aggregated_df, file.path(RESULTS_PATH, "scgpt_10th_eval_table.rds"))
 
 # Unpaired 
 combined_aggregated_df %>% 
@@ -150,7 +151,7 @@ combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("sour
                                 all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)), 
                                 by = c("source", "gene"), 
                                 suffixes = c("_FALSE", "_TRUE")) %>% tibble
-saveRDS(combined_aggregated_df, file.path(DATA_PATH, "90th_eval_table.rds"))
+saveRDS(combined_aggregated_df, file.path(RESULTS_PATH, "scgpt_90th_eval_table.rds"))
 
 # Unpaired 
 combined_aggregated_df %>% 
