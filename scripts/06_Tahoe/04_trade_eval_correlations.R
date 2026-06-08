@@ -133,10 +133,11 @@ run_trade_eval_correlations <- function(eval_paths, de_rds, output_dir, source_c
 if (sys.nframe() == 0) {
   project_path <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon")
   args <- parse_cli_args()
-  eval_dir <- default_arg(args, "eval-dir", file.path(project_path, "results/eval/tahoe"))
-  eval_pattern <- default_arg(args, "eval-pattern", "*_projectcor_*.rds")
-  eval_paths <- Sys.glob(file.path(eval_dir, eval_pattern))
-  if (length(eval_paths) == 0) eval_paths <- list.files(eval_dir, pattern = eval_pattern, full.names = TRUE)
+  eval_dir     <- default_arg(args, "eval-dir", file.path(project_path, "results/eval/tahoe"))
+  method       <- default_arg(args, "method", "projectcor_gsva")
+  eval_pattern <- default_arg(args, "eval-pattern", paste0("*", method, "*_eval_table.rds"))
+  eval_paths   <- Sys.glob(file.path(eval_dir, eval_pattern))
+  if (length(eval_paths) == 0) eval_paths <- list.files(eval_dir, pattern = gsub("\\*", ".*", eval_pattern), full.names = TRUE)
   run_trade_eval_correlations(
     eval_paths = eval_paths,
     de_rds = default_arg(args, "source-de-rds", file.path(project_path, "data/tahoe/tahoe_deseq_dfs.rds")),

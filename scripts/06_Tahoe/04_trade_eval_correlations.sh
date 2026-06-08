@@ -11,4 +11,4 @@ module load R/4.4.3
 
 Rscript --verbose 04_trade_eval_correlations.R \
   --source-cell-line NCI-H23 \
-  --eval-pattern "*_projectcor_*.rds"
+  --method projectcor_gsva
