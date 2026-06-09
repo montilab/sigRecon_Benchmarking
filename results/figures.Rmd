@@ -69,9 +69,17 @@ load_rds <- function(dir, file) {
   if (file.exists(path)) readRDS(path) else NULL
 }
 
+# ── Normalise column names: no_change tables use NES/jacc instead of NES_TRUE/jacc_TRUE
+normalize_eval_cols <- function(df) {
+  if (!"NES_TRUE"  %in% names(df) && "NES"  %in% names(df)) df <- dplyr::rename(df, NES_TRUE  = NES)
+  if (!"jacc_TRUE" %in% names(df) && "jacc" %in% names(df)) df <- dplyr::rename(df, jacc_TRUE = jacc)
+  df
+}
+
 # ── Summarise one eval table → single-row tibble (NES_mean, jacc_mean) ───────
 summarize_unpaired <- function(eval_table) {
   if (is.null(eval_table)) return(tibble(NES_mean = NA_real_, jacc_mean = NA_real_))
+  eval_table <- normalize_eval_cols(eval_table)
   eval_table %>%
     dplyr::group_by(source) %>%
     dplyr::summarise(NES_mean  = median(NES_TRUE,  na.rm = TRUE),
@@ -283,6 +291,7 @@ unpaired_90th
 # ── Summarise one eval table → single-row tibble (KS_meta_p, Jacc_meta_p) ────
 summarize_paired <- function(eval_table) {
   if (is.null(eval_table)) return(tibble(KS_meta_p = NA_real_, Jacc_meta_p = NA_real_))
+  eval_table <- normalize_eval_cols(eval_table)
   eval_table %>%
     dplyr::group_by(source) %>%
     dplyr::summarize(
