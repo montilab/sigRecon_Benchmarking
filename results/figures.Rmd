@@ -90,6 +90,7 @@ file_map <- list(
       pc_eigen    = "ctrl_projectcor_eigen_eval_table.rds",
       pc_gsva     = "ctrl_projectcor_gsva_eval_table.rds",
       networkprop = "ctrl_networkprop_eval_table.rds",
+      orthos      = "ctrl_orthos_residual_eval_table.rds",
       scgpt       = NULL,
       stack       = NULL
     ),
@@ -119,6 +120,7 @@ file_map <- list(
       pc_eigen    = "ctrl_projectcor_eigen_eval_table.rds",
       pc_gsva     = "ctrl_projectcor_gsva_eval_table.rds",
       networkprop = "ctrl_networkprop_eval_table.rds",
+      orthos      = NULL,
       scgpt       = NULL,
       stack       = "ctrl_stack_eval_table.rds"
     ),
@@ -148,6 +150,7 @@ file_map <- list(
       pc_eigen    = "ctrl_projectcor_eigen_eval_table.rds",
       pc_gsva     = "ctrl_projectcor_gsva_eval_table.rds",
       networkprop = "ctrl_networkprop_eval_table.rds",
+      orthos      = "ctrl_orthos_residual_eval_table.rds",
       scgpt       = NULL,
       stack       = "stack_ctrl_eval_table.rds"
     ),
@@ -177,6 +180,7 @@ file_map <- list(
       pc_eigen    = "ctrl_projectcor_eigen_eval_table.rds",
       pc_gsva     = "ctrl_projectcor_gsva_eval_table.rds",
       networkprop = "ctrl_networkprop_eval_table.rds",
+      orthos      = "ctrl_orthos_residual_eval_table.rds",
       scgpt       = NULL,
       stack       = "stack_ctrl_eval_table.rds"
     ),
@@ -208,9 +212,13 @@ method_labels <- c(
   pc_eigen    = "project cor (eigen)",
   pc_gsva     = "project cor (gsva)",
   networkprop = "network prop",
+  orthos      = "orthos",
   scgpt       = "scGPT",
   stack       = "stack"
 )
+
+# Methods that only exist for the ctrl regime (omitted from 10th/90th tables)
+ctrl_only_methods <- c("orthos")
 
 datasets        <- c("drugmatrix", "perturb-seq", "sciplex", "tahoe")
 dataset_labels  <- c("drugmatrix", "perturbseq",  "sciplex", "tahoe")
@@ -219,7 +227,8 @@ regimes         <- c("ctrl", "10th", "90th")
 
 # ── Build one unpaired summary table for a given regime ──────────────────────
 build_unpaired_table <- function(regime) {
-  rows <- lapply(methods, function(m) {
+  regime_methods <- if (regime == "ctrl") methods else methods[!methods %in% ctrl_only_methods]
+  rows <- lapply(regime_methods, function(m) {
     vals <- lapply(seq_along(datasets), function(i) {
       ds   <- datasets[i]
       fname <- file_map[[ds]][[regime]][[m]]
@@ -294,7 +303,8 @@ paired_methods <- methods[methods != "no_change"]
 
 # ── Build one paired summary table for a given regime ────────────────────────
 build_paired_table <- function(regime) {
-  rows <- lapply(paired_methods, function(m) {
+  regime_methods <- if (regime == "ctrl") paired_methods else paired_methods[!paired_methods %in% ctrl_only_methods]
+  rows <- lapply(regime_methods, function(m) {
     vals <- lapply(seq_along(datasets), function(i) {
       ds    <- datasets[i]
       fname <- file_map[[ds]][[regime]][[m]]
