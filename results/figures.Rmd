@@ -60,6 +60,287 @@ summarize_method <- function(df, method_name){
 }
 ```
 
+# Unpaired results
+
+```{r unpaired-results, message=FALSE, warning=FALSE}
+# ── Helper: load an RDS or return NULL ────────────────────────────────────────
+load_rds <- function(dir, file) {
+  path <- file.path(RESULTS_PATH, dir, file)
+  if (file.exists(path)) readRDS(path) else NULL
+}
+
+# ── Summarise one eval table → single-row tibble (NES_mean, jacc_mean) ───────
+summarize_unpaired <- function(eval_table) {
+  if (is.null(eval_table)) return(tibble(NES_mean = NA_real_, jacc_mean = NA_real_))
+  eval_table %>%
+    dplyr::group_by(source) %>%
+    dplyr::summarise(NES_mean  = median(NES_TRUE,  na.rm = TRUE),
+                     jacc_mean = median(jacc_TRUE, na.rm = TRUE),
+                     .groups = "drop") %>%
+    dplyr::summarise(NES_mean  = median(NES_mean),
+                     jacc_mean = median(jacc_mean))
+}
+
+# ── File map: list(dataset = list(regime = list(method = filename))) ──────────
+file_map <- list(
+  drugmatrix = list(
+    ctrl = list(
+      no_change   = "no_change_eval_table.rds",
+      mean        = "ctrl_mean_eval_table.rds",
+      pc_eigen    = "ctrl_projectcor_eigen_eval_table.rds",
+      pc_gsva     = "ctrl_projectcor_gsva_eval_table.rds",
+      networkprop = "ctrl_networkprop_eval_table.rds",
+      scgpt       = NULL,
+      stack       = NULL
+    ),
+    `10th` = list(
+      no_change   = "no_change_eval_table.rds",
+      mean        = "ctrl_10th_mean_eval_table.rds",
+      pc_eigen    = "10th_projectcor_eigen_eval_table.rds",
+      pc_gsva     = "10th_projectcor_gsva_eval_table.rds",
+      networkprop = "ctrl_10th_networkprop_eval_table.rds",
+      scgpt       = NULL,
+      stack       = NULL
+    ),
+    `90th` = list(
+      no_change   = "no_change_eval_table.rds",
+      mean        = "ctrl_90th_mean_eval_table.rds",
+      pc_eigen    = "90th_projectcor_eigen_eval_table.rds",
+      pc_gsva     = "90th_projectcor_gsva_eval_table.rds",
+      networkprop = "ctrl_90th_networkprop_eval_table.rds",
+      scgpt       = NULL,
+      stack       = NULL
+    )
+  ),
+  `perturb-seq` = list(
+    ctrl = list(
+      no_change   = "no_change_eval_table.rds",
+      mean        = "ctrl_mean_eval_table.rds",
+      pc_eigen    = "ctrl_projectcor_eigen_eval_table.rds",
+      pc_gsva     = "ctrl_projectcor_gsva_eval_table.rds",
+      networkprop = "ctrl_networkprop_eval_table.rds",
+      scgpt       = NULL,
+      stack       = "ctrl_stack_eval_table.rds"
+    ),
+    `10th` = list(
+      no_change   = "no_change_eval_table.rds",
+      mean        = "ctrl_10th_mean_eval_table.rds",
+      pc_eigen    = "10th_projectcor_eigen_eval_table.rds",
+      pc_gsva     = "10th_projectcor_gsva_eval_table.rds",
+      networkprop = "ctrl_10th_networkprop_eval_table.rds",
+      scgpt       = "scgpt_10th_eval_table.rds",
+      stack       = "10th_stack_eval_table.rds"
+    ),
+    `90th` = list(
+      no_change   = "no_change_eval_table.rds",
+      mean        = "ctrl_90th_mean_eval_table.rds",
+      pc_eigen    = "90th_projectcor_eigen_eval_table.rds",
+      pc_gsva     = "90th_projectcor_gsva_eval_table.rds",
+      networkprop = "ctrl_90th_networkprop_eval_table.rds",
+      scgpt       = "scgpt_90th_eval_table.rds",
+      stack       = "90th_stack_eval_table.rds"
+    )
+  ),
+  sciplex = list(
+    ctrl = list(
+      no_change   = "no_change_eval_table.rds",
+      mean        = "ctrl_mean_eval_table.rds",
+      pc_eigen    = "ctrl_projectcor_eigen_eval_table.rds",
+      pc_gsva     = "ctrl_projectcor_gsva_eval_table.rds",
+      networkprop = "ctrl_networkprop_eval_table.rds",
+      scgpt       = NULL,
+      stack       = "stack_ctrl_eval_table.rds"
+    ),
+    `10th` = list(
+      no_change   = "no_change_eval_table.rds",
+      mean        = "ctrl_10th_mean_eval_table.rds",
+      pc_eigen    = "10th_projectcor_eigen_eval_table.rds",
+      pc_gsva     = "10th_projectcor_gsva_eval_table.rds",
+      networkprop = "10th_networkprop_eval_table.rds",
+      scgpt       = NULL,
+      stack       = "stack_10th_eval_table.rds"
+    ),
+    `90th` = list(
+      no_change   = "no_change_eval_table.rds",
+      mean        = "ctrl_90th_mean_eval_table.rds",
+      pc_eigen    = "90th_projectcor_eigen_eval_table.rds",
+      pc_gsva     = "90th_projectcor_gsva_eval_table.rds",
+      networkprop = "90th_networkprop_eval_table.rds",
+      scgpt       = NULL,
+      stack       = "stack_90th_eval_table.rds"
+    )
+  ),
+  tahoe = list(
+    ctrl = list(
+      no_change   = "no_change_eval_table.rds",
+      mean        = "ctrl_mean_eval_table.rds",
+      pc_eigen    = "ctrl_projectcor_eigen_eval_table.rds",
+      pc_gsva     = "ctrl_projectcor_gsva_eval_table.rds",
+      networkprop = "ctrl_networkprop_eval_table.rds",
+      scgpt       = NULL,
+      stack       = "stack_ctrl_eval_table.rds"
+    ),
+    `10th` = list(
+      no_change   = "no_change_eval_table.rds",
+      mean        = "ctrl_10th_mean_eval_table.rds",
+      pc_eigen    = "10th_projectcor_eigen_eval_table.rds",
+      pc_gsva     = "10th_projectcor_gsva_eval_table.rds",
+      networkprop = "network_prop_10th_eval_table.rds",
+      scgpt       = NULL,
+      stack       = "stack_10th_eval_table.rds"
+    ),
+    `90th` = list(
+      no_change   = "no_change_eval_table.rds",
+      mean        = "ctrl_90th_mean_eval_table.rds",
+      pc_eigen    = "90th_projectcor_eigen_eval_table.rds",
+      pc_gsva     = "90th_projectcor_gsva_eval_table.rds",
+      networkprop = "network_prop_90th_eval_table.rds",
+      scgpt       = NULL,
+      stack       = "stack_90th_eval_table.rds"
+    )
+  )
+)
+
+# ── Method display labels (in desired row order) ──────────────────────────────
+method_labels <- c(
+  no_change   = "no-change",
+  mean        = "mean",
+  pc_eigen    = "project cor (eigen)",
+  pc_gsva     = "project cor (gsva)",
+  networkprop = "network prop",
+  scgpt       = "scGPT",
+  stack       = "stack"
+)
+
+datasets        <- c("drugmatrix", "perturb-seq", "sciplex", "tahoe")
+dataset_labels  <- c("drugmatrix", "perturbseq",  "sciplex", "tahoe")
+methods         <- names(method_labels)
+regimes         <- c("ctrl", "10th", "90th")
+
+# ── Build one unpaired summary table for a given regime ──────────────────────
+build_unpaired_table <- function(regime) {
+  rows <- lapply(methods, function(m) {
+    vals <- lapply(seq_along(datasets), function(i) {
+      ds   <- datasets[i]
+      fname <- file_map[[ds]][[regime]][[m]]
+      tbl   <- if (!is.null(fname)) load_rds(ds, fname) else NULL
+      summarize_unpaired(tbl)
+    })
+    row <- tibble(method = method_labels[m])
+    for (i in seq_along(datasets)) {
+      dl <- dataset_labels[i]
+      row[[paste0(dl, "_NES")]]  <- vals[[i]]$NES_mean
+      row[[paste0(dl, "_Jacc")]] <- vals[[i]]$jacc_mean
+    }
+    row
+  })
+  bind_rows(rows) %>%
+    dplyr::select(method,
+                  drugmatrix_NES, drugmatrix_Jacc,
+                  perturbseq_NES, perturbseq_Jacc,
+                  sciplex_NES,    sciplex_Jacc,
+                  tahoe_NES,      tahoe_Jacc)
+}
+
+unpaired_ctrl <- build_unpaired_table("ctrl")
+unpaired_10th <- build_unpaired_table("10th")
+unpaired_90th <- build_unpaired_table("90th")
+
+csv_dir <- file.path(RESULTS_PATH, "summary_tables")
+dir.create(csv_dir, showWarnings = FALSE, recursive = TRUE)
+write.csv(unpaired_ctrl, file.path(csv_dir, "unpaired_ctrl.csv"),  row.names = FALSE)
+write.csv(unpaired_10th, file.path(csv_dir, "unpaired_10th.csv"), row.names = FALSE)
+write.csv(unpaired_90th, file.path(csv_dir, "unpaired_90th.csv"), row.names = FALSE)
+```
+
+## ctrl
+```{r}
+unpaired_ctrl
+```
+
+## 10th
+```{r}
+unpaired_10th
+```
+
+## 90th
+```{r}
+unpaired_90th
+```
+
+# Paired results
+
+```{r paired-results, message=FALSE, warning=FALSE}
+# ── Summarise one eval table → single-row tibble (KS_meta_p, Jacc_meta_p) ────
+summarize_paired <- function(eval_table) {
+  if (is.null(eval_table)) return(tibble(KS_meta_p = NA_real_, Jacc_meta_p = NA_real_))
+  eval_table %>%
+    dplyr::group_by(source) %>%
+    dplyr::summarize(
+      Jacc_Wilcox_pval = wilcox.test(jacc_TRUE, jacc_FALSE,
+                                     paired = TRUE, alternative = "greater")$p.value,
+      KS_Wilcox_pval   = wilcox.test(NES_TRUE,  NES_FALSE,
+                                     paired = TRUE, alternative = "greater")$p.value,
+      .groups = "drop"
+    ) %>%
+    dplyr::summarize(
+      KS_meta_p   = fishers_meta_p(KS_Wilcox_pval),
+      Jacc_meta_p = fishers_meta_p(Jacc_Wilcox_pval)
+    )
+}
+
+# Methods for paired results (no no-change)
+paired_methods <- methods[methods != "no_change"]
+
+# ── Build one paired summary table for a given regime ────────────────────────
+build_paired_table <- function(regime) {
+  rows <- lapply(paired_methods, function(m) {
+    vals <- lapply(seq_along(datasets), function(i) {
+      ds    <- datasets[i]
+      fname <- file_map[[ds]][[regime]][[m]]
+      tbl   <- if (!is.null(fname)) load_rds(ds, fname) else NULL
+      summarize_paired(tbl)
+    })
+    row <- tibble(method = method_labels[m])
+    for (i in seq_along(datasets)) {
+      dl <- dataset_labels[i]
+      row[[paste0(dl, "_NES")]]  <- vals[[i]]$KS_meta_p
+      row[[paste0(dl, "_Jacc")]] <- vals[[i]]$Jacc_meta_p
+    }
+    row
+  })
+  bind_rows(rows) %>%
+    dplyr::select(method,
+                  drugmatrix_NES, drugmatrix_Jacc,
+                  perturbseq_NES, perturbseq_Jacc,
+                  sciplex_NES,    sciplex_Jacc,
+                  tahoe_NES,      tahoe_Jacc)
+}
+
+paired_ctrl <- build_paired_table("ctrl")
+paired_10th <- build_paired_table("10th")
+paired_90th <- build_paired_table("90th")
+
+write.csv(paired_ctrl, file.path(csv_dir, "paired_ctrl.csv"),  row.names = FALSE)
+write.csv(paired_10th, file.path(csv_dir, "paired_10th.csv"), row.names = FALSE)
+write.csv(paired_90th, file.path(csv_dir, "paired_90th.csv"), row.names = FALSE)
+```
+
+## ctrl
+```{r}
+paired_ctrl
+```
+
+## 10th
+```{r}
+paired_10th
+```
+
+## 90th
+```{r}
+paired_90th
+```
+
 # Tahoe {.tabset}
 
 ## MOA Delta NES Across Methods
