@@ -343,21 +343,98 @@ paired_90th <- build_paired_table("90th")
 write.csv(paired_ctrl, file.path(csv_dir, "paired_ctrl.csv"),  row.names = FALSE)
 write.csv(paired_10th, file.path(csv_dir, "paired_10th.csv"), row.names = FALSE)
 write.csv(paired_90th, file.path(csv_dir, "paired_90th.csv"), row.names = FALSE)
+
+# ── Summarise one eval table → single-row tibble (KS_stat, Jacc_stat) ────────
+summarize_paired_stat <- function(eval_table) {
+  if (is.null(eval_table)) return(tibble(KS_stat = NA_real_, Jacc_stat = NA_real_))
+  eval_table <- normalize_eval_cols(eval_table)
+  if (!all(c("jacc_FALSE", "NES_FALSE") %in% names(eval_table))) {
+    return(tibble(KS_stat = NA_real_, Jacc_stat = NA_real_))
+  }
+  eval_table %>%
+    dplyr::group_by(source) %>%
+    dplyr::summarize(
+      Jacc_stat = wilcox.test(jacc_TRUE, jacc_FALSE,
+                              paired = TRUE, alternative = "greater")$statistic,
+      KS_stat   = wilcox.test(NES_TRUE,  NES_FALSE,
+                              paired = TRUE, alternative = "greater")$statistic,
+      .groups = "drop"
+    ) %>%
+    dplyr::summarize(
+      KS_stat   = median(KS_stat),
+      Jacc_stat = median(Jacc_stat)
+    )
+}
+
+# ── Build one paired statistic table for a given regime ──────────────────────
+build_paired_stat_table <- function(regime) {
+  regime_methods <- if (regime == "ctrl") paired_methods else paired_methods[!paired_methods %in% ctrl_only_methods]
+  rows <- lapply(regime_methods, function(m) {
+    vals <- lapply(seq_along(datasets), function(i) {
+      ds    <- datasets[i]
+      fname <- file_map[[ds]][[regime]][[m]]
+      tbl   <- if (!is.null(fname)) load_rds(ds, fname) else NULL
+      summarize_paired_stat(tbl)
+    })
+    row <- tibble(method = method_labels[m])
+    for (i in seq_along(datasets)) {
+      dl <- dataset_labels[i]
+      row[[paste0(dl, "_NES")]]  <- vals[[i]]$KS_stat
+      row[[paste0(dl, "_Jacc")]] <- vals[[i]]$Jacc_stat
+    }
+    row
+  })
+  bind_rows(rows) %>%
+    dplyr::select(method,
+                  drugmatrix_NES, drugmatrix_Jacc,
+                  perturbseq_NES, perturbseq_Jacc,
+                  sciplex_NES,    sciplex_Jacc,
+                  tahoe_NES,      tahoe_Jacc)
+}
+
+paired_stat_ctrl <- build_paired_stat_table("ctrl")
+paired_stat_10th <- build_paired_stat_table("10th")
+paired_stat_90th <- build_paired_stat_table("90th")
+
+write.csv(paired_stat_ctrl, file.path(csv_dir, "paired_stat_ctrl.csv"),  row.names = FALSE)
+write.csv(paired_stat_10th, file.path(csv_dir, "paired_stat_10th.csv"), row.names = FALSE)
+write.csv(paired_stat_90th, file.path(csv_dir, "paired_stat_90th.csv"), row.names = FALSE)
 ```
 
 ## ctrl
+
+### p-value
 ```{r}
 paired_ctrl
 ```
 
+### test statistic
+```{r}
+paired_stat_ctrl
+```
+
 ## 10th
+
+### p-value
 ```{r}
 paired_10th
 ```
 
+### test statistic
+```{r}
+paired_stat_10th
+```
+
 ## 90th
+
+### p-value
 ```{r}
 paired_90th
+```
+
+### test statistic
+```{r}
+paired_stat_90th
 ```
 
 # Tahoe {.tabset}
