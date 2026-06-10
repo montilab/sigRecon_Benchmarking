@@ -1,0 +1,8 @@
+"method","drugmatrix_NES","drugmatrix_Jacc","perturbseq_NES","perturbseq_Jacc","sciplex_NES","sciplex_Jacc","tahoe_NES","tahoe_Jacc"
+"mean",1,0.99999999999998,1,1,1,1,1,1
+"project cor (eigen)",0.768254817765063,0.999999946884885,1,1,1,1,1,1
+"project cor (gsva)",0.937914698400078,0.999999988522509,1,1,1,1,1,1
+"network prop",0.989027425838082,0.999999993990448,1,1,1,1,1,1
+"orthos",0.799171875768205,0.999999999999997,NA,NA,1,1,1,1
+"scGPT",NA,NA,NA,NA,NA,NA,NA,NA
+"stack",NA,NA,1,1,1,1,1,1
