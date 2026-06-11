@@ -29,8 +29,8 @@ RESULTS_PATH <- file.path(PROJECT_PATH, "results/eval")
 do_save            <- FALSE   # summary tables (Unpaired / Paired results sections)
 do_save_tahoe      <- FALSE   # Tahoe visualization plot objects
 do_save_drugmatrix <- FALSE   # DrugMatrix visualization plot objects
-do_save_perturbseq <- TRUE    # Perturb-seq visualization plot objects
-do_save_sciplex    <- TRUE    # SciPlex visualization plot objects
+do_save_perturbseq <- FALSE   # Perturb-seq visualization plot objects
+do_save_sciplex    <- FALSE   # SciPlex visualization plot objects
 ```
 
 ```{r}
@@ -1586,8 +1586,8 @@ baseline_means <- plot_long %>%
   summarise(yintercept = median(value), .groups = "drop")
 
 ggplot(plot_long, aes(method, value, fill = method)) +
-  geom_violin(width = 0.9, alpha = 0.35, color = NA) +
-  ggbeeswarm::geom_beeswarm(size = 0.1, alpha = 0.7, cex = 0.7) +
+  geom_violin(width = 1.4, alpha = 0.35, color = NA) +
+  ggbeeswarm::geom_quasirandom(size = 0.05, alpha = 0.2, cex = 0.7) +
   stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
   geom_hline(data = baseline_means, aes(yintercept = yintercept),
              linetype = "dotted", color = "grey50", linewidth = 0.8) +
@@ -1639,7 +1639,7 @@ if (do_save_perturbseq) {
 ```{r}
 ggplot(plot_long, aes(method, value, fill = method)) +
   geom_violin(width = 0.9, alpha = 0.35, color = NA) +
-  ggbeeswarm::geom_beeswarm(size = 0.1, alpha = 0.7, cex = 0.7) +
+  ggbeeswarm::geom_quasirandom(size = 0.05, alpha = 0.2, cex = 0.7) +
   stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
   geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.8) +
   facet_wrap(~metric, scales = "free_y") +
@@ -1741,7 +1741,7 @@ baseline_means <- plot_long %>%
 
 ggplot(plot_long, aes(method, value, fill = method)) +
   geom_violin(width = 0.9, alpha = 0.35, color = NA) +
-  ggbeeswarm::geom_beeswarm(size = 0.1, alpha = 0.7, cex = 0.7) +
+  ggbeeswarm::geom_quasirandom(size = 0.05, alpha = 0.2, cex = 0.7) +
   stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
   geom_hline(data = baseline_means, aes(yintercept = yintercept),
              linetype = "dotted", color = "grey50", linewidth = 0.8) +
@@ -1766,7 +1766,7 @@ ggplot(summary_df,
        aes(x = -log10(fisher_p), y = method, size = prop, color = -log10(fisher_p))) +
   geom_point(alpha = 0.9) +
   facet_wrap(~metric) +
-  coord_cartesian(xlim = c(-0.6, 4.5)) +
+  coord_cartesian(xlim = c(-0.6, 6)) +
   scale_color_viridis_c(name = "-log10(meta p)", option = "A") +
   scale_size(range = c(3, 10), name = "Fraction Improved") +
   labs(x = "-log10 Fisher meta‑p", y = "") +
@@ -1845,7 +1845,7 @@ baseline_means <- plot_long %>%
 
 ggplot(plot_long, aes(method, value, fill = method)) +
   geom_violin(width = 0.9, alpha = 0.35, color = NA) +
-  ggbeeswarm::geom_beeswarm(size = 0.1, alpha = 0.7, cex = 0.7) +
+  ggbeeswarm::geom_quasirandom(size = 0.05, alpha = 0.2, cex = 0.7) +
   stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
   geom_hline(data = baseline_means, aes(yintercept = yintercept),
              linetype = "dotted", color = "grey50", linewidth = 0.8) +
@@ -2101,7 +2101,7 @@ baseline_means <- plot_long %>%
 
 ggplot(plot_long, aes(method, value, fill = method)) +
   geom_violin(width = 0.9, alpha = 0.35, color = NA) +
-  ggbeeswarm::geom_beeswarm(size = 0.1, alpha = 0.7, cex = 0.7) +
+  ggbeeswarm::geom_quasirandom(size = 0.8, alpha = 0.7, cex = 0.7) +
   stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
   geom_hline(data = baseline_means, aes(yintercept = yintercept),
              linetype = "dotted", color = "grey50", linewidth = 0.8) +
@@ -2201,7 +2201,7 @@ baseline_means <- plot_long %>%
 
 ggplot(plot_long, aes(method, value, fill = method)) +
   geom_violin(width = 0.9, alpha = 0.35, color = NA) +
-  ggbeeswarm::geom_beeswarm(size = 0.1, alpha = 0.7, cex = 0.7) +
+  ggbeeswarm::geom_quasirandom(size = 0.8, alpha = 0.7, cex = 0.7) +
   stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
   geom_hline(data = baseline_means, aes(yintercept = yintercept),
              linetype = "dotted", color = "grey50", linewidth = 0.8) +
