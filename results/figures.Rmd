@@ -315,8 +315,8 @@ summarize_paired <- function(eval_table) {
       .groups = "drop"
     ) %>%
     dplyr::summarize(
-      KS_meta_p   = fishers_meta_p(KS_Wilcox_pval),
-      Jacc_meta_p = fishers_meta_p(Jacc_Wilcox_pval)
+      KS_meta_p   = fishers_meta_p(pmax(KS_Wilcox_pval,   .Machine$double.eps)),
+      Jacc_meta_p = fishers_meta_p(pmax(Jacc_Wilcox_pval, .Machine$double.eps))
     )
 }
 
