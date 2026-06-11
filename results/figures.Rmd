@@ -1493,7 +1493,7 @@ if (do_save_drugmatrix) {
 ```{r}
 ggplot(swarm_long, aes(method, value, fill = method)) +
   geom_violin(width = 0.9, alpha = 0.35, color = NA) +
-  ggbeeswarm::geom_beeswarm(size = 0.1, alpha = 0.7, cex = 0.7) +
+  ggbeeswarm::geom_quasirandom(size = 0.1, alpha = 0.7, cex = 0.7) +
   stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
   geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.8) +
   facet_wrap(~metric, scales = "free_y") +
@@ -2493,7 +2493,7 @@ if (do_save_sciplex) {
 ```{r}
 ggplot(swarm_long, aes(method, value, fill = method)) +
   geom_violin(width = 0.9, alpha = 0.35, color = NA) +
-  ggbeeswarm::geom_beeswarm(size = 0.1, alpha = 0.7, cex = 0.7) +
+  ggbeeswarm::geom_quasirandom(size = 0.1, alpha = 0.7, cex = 0.7) +
   stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
   geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.8) +
   facet_wrap(~metric, scales = "free_y") +
