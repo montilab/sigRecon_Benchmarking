@@ -579,7 +579,61 @@ ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_ctrl_unpaired.png"),
 )
 ```
 
-### Paired
+### Paired {.tabset}
+
+#### Swarm
+```{r}
+if (do_save_tahoe) {
+  swarm_df <- bind_rows(
+    tahoe_ctrl_mean_df %>%
+      transmute(drug = gene, method = "Mean",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    tahoe_ctrl_net_df %>%
+      transmute(drug = gene, method = "NetworkProp",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    tahoe_ctrl_proj_e_df %>%
+      transmute(drug = gene, method = "ProjectCor (Eigen)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    tahoe_ctrl_proj_g_df %>%
+      transmute(drug = gene, method = "ProjectCor (GSVA)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    tahoe_orthos_df %>%
+      transmute(drug = gene, method = "Orthos",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    tahoe_stack_df %>%
+      transmute(drug = gene, method = "Stack",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE)
+  )
+  swarm_long <- swarm_df %>%
+    rename(`Jaccard ∆` = jacc_delta, `NES ∆` = NES_delta) %>%
+    pivot_longer(c(`Jaccard ∆`, `NES ∆`), names_to = "metric", values_to = "value")
+  saveRDS(swarm_long, file.path(RESULTS_PATH, "tahoe/ctrl_paired_swarm_plot_df.rds"))
+} else {
+  swarm_long <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_paired_swarm_plot_df.rds"))
+}
+```
+```{r}
+ggplot(swarm_long, aes(method, value, fill = method)) +
+  geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+  ggbeeswarm::geom_quasirandom(width = 0.15, alpha = 0.15, size = 0.05, groupOnX = TRUE) +
+  stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.8) +
+  facet_wrap(~metric, scales = "free_y") +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("Mean", "NetworkProp",
+                               "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Orthos", "Stack")) +
+  labs(x = "", y = "Score") +
+  theme_classic(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "none",
+        strip.text = element_text(face = "bold"))
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_ctrl_paired_swarm.png"),
+  width = 8, height = 5, dpi = 400)
+```
+
+#### Dot Plot
 ```{r}
 ggplot(summary_df,
        aes(x = -log10(fisher_p),
