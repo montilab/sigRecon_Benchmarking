@@ -946,47 +946,6 @@ ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_90th_paired.png"),
 )
 ```
 
-## Trade
-```{r}
-trade_metrics_10th <- readRDS(file.path(PROJECT_PATH, "results/plots/trade_metric_correlations/tahoe/10th_projectcor_eigen_eval_table_trade_joined.rds"))
-trade_metrics_10th
-```
-```{r}
-ggplot(trade_metrics_10th, aes(x = TI, y = delta_NES)) +
-    geom_hline(yintercept = 0, color = "grey75", linewidth = 0.35) +
-    geom_point(aes(color = gene), alpha = 0.72, size = 1.8) +
-    geom_smooth(method = "lm", se = FALSE, color = "black", linewidth = 0.45) +
-    theme_bw(base_size = 11) +
-    theme(
-      panel.grid.minor = element_blank(),
-      legend.position = "right"
-    ) +
-    labs(
-      x = "TI",
-      y = "delta_NES",
-      title = "TI vs delta NES (colored by perturbation)",
-      color = "perturbation"
-    )
-```
-
-```{r}
-ggplot(trade_metrics_10th, aes(x = TI, y = delta_NES)) +
-    geom_hline(yintercept = 0, color = "grey75", linewidth = 0.35) +
-    geom_point(aes(color = target), alpha = 0.72, size = 1.8) +
-    geom_smooth(method = "lm", se = FALSE, color = "black", linewidth = 0.45) +
-    theme_bw(base_size = 11) +
-    theme(
-      panel.grid.minor = element_blank(),
-      legend.position = "right"
-    ) +
-    labs(
-      x = "TI",
-      y = "delta_NES",
-      title = "TI vs delta NES (colored by cell line)",
-      color = "cellline"
-    )
-```
-
 
 # Drugmatrix {.tabset}
 
