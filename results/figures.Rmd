@@ -26,9 +26,9 @@ PROJECT_PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_re
 RESULTS_PATH <- file.path(PROJECT_PATH, "results/eval")
 
 # Set to TRUE to recompute and overwrite saved objects; FALSE to load from saved files
-do_save            <- TRUE   # summary tables (Unpaired / Paired results sections)
-do_save_tahoe      <- TRUE   # Tahoe visualization plot objects
-do_save_drugmatrix <- TRUE   # DrugMatrix visualization plot objects
+do_save            <- FALSE   # summary tables (Unpaired / Paired results sections)
+do_save_tahoe      <- FALSE   # Tahoe visualization plot objects
+do_save_drugmatrix <- FALSE   # DrugMatrix visualization plot objects
 ```
 
 ```{r}
@@ -65,7 +65,7 @@ summarize_method <- function(df, method_name){
 }
 ```
 
-# Unpaired results
+# Unpaired results {.tabset}
 
 ```{r unpaired-results, message=FALSE, warning=FALSE}
 # ── Helper: load an RDS or return NULL ────────────────────────────────────────
@@ -296,7 +296,7 @@ unpaired_10th
 unpaired_90th
 ```
 
-# Paired results
+# Paired results {.tabset}
 
 ```{r paired-results, message=FALSE, warning=FALSE}
 # ── Summarise one eval table → single-row tibble (KS_meta_p, Jacc_meta_p) ────
@@ -422,7 +422,7 @@ if (do_save) {
 }
 ```
 
-## ctrl
+## ctrl {.tabset}
 
 ### p-value
 ```{r}
@@ -434,7 +434,7 @@ paired_ctrl
 paired_stat_ctrl
 ```
 
-## 10th
+## 10th {.tabset}
 
 ### p-value
 ```{r}
@@ -446,7 +446,7 @@ paired_10th
 paired_stat_10th
 ```
 
-## 90th
+## 90th {.tabset}
 
 ### p-value
 ```{r}
@@ -459,697 +459,6 @@ paired_stat_90th
 ```
 
 # Tahoe {.tabset}
-
-## MOA Delta NES Across Methods
-```{r}
-tahoe_metadata_path <- file.path(
-  Sys.getenv("AGED"),
-  "CBMrepositoryData/perturbational_data/tahoe/metadata/drug_metadata.parquet"
-)
-
-normalize_drug_name <- function(x) {
-  x %>%
-    str_to_lower() %>%
-    str_replace_all("[^[:alnum:]]+", "")
-}
-
-normalize_stack_target <- function(source, target) {
-  if_else(
-    target == "target_context" & str_detect(source, "^nci_h23_"),
-    str_remove(source, "^nci_h23_"),
-    target
-  )
-}
-
-clean_moa_fine_label <- function(x) {
-  x %>%
-    str_remove(regex("\\s+(agonist|activator|inhibitor|antagonist)$", ignore_case = TRUE)) %>%
-    str_squish()
-}
-
-clean_moa_broad_label <- function(x) {
-  recode(
-    x,
-    "activator/agonist" = "Activator/\nAgonist",
-    "inhibitor/antagonist" = "Inhibitor/\nAntagonist"
-  )
-}
-
-if (do_save_tahoe) {
-  tahoe_drug_metadata <- arrow::read_parquet(tahoe_metadata_path) %>%
-    as_tibble() %>%
-    select(drug, `moa-broad`, `moa-fine`) %>%
-    distinct() %>%
-    mutate(drug_key = normalize_drug_name(drug)) %>%
-    distinct(drug_key, .keep_all = TRUE)
-
-  tahoe_eval_specs <- tribble(
-    ~method, ~regime, ~file,
-    "Mean", "ctrl", "ctrl_mean_eval_table.rds",
-    "Mean", "10th", "ctrl_10th_mean_eval_table.rds",
-    "Mean", "90th", "ctrl_90th_mean_eval_table.rds",
-    "NetworkProp", "ctrl", "ctrl_networkprop_eval_table.rds",
-    "NetworkProp", "10th", "network_prop_10th_eval_table.rds",
-    "NetworkProp", "90th", "network_prop_90th_eval_table.rds",
-    "ProjectCor (Eigen)", "ctrl", "ctrl_projectcor_eigen_eval_table.rds",
-    "ProjectCor (Eigen)", "10th", "10th_projectcor_eigen_eval_table.rds",
-    "ProjectCor (Eigen)", "90th", "90th_projectcor_eigen_eval_table.rds",
-    "ProjectCor (GSVA)", "ctrl", "ctrl_projectcor_gsva_eval_table.rds",
-    "ProjectCor (GSVA)", "10th", "10th_projectcor_gsva_eval_table.rds",
-    "ProjectCor (GSVA)", "90th", "90th_projectcor_gsva_eval_table.rds",
-    "Orthos", "ctrl", "ctrl_orthos_residual_eval_table.rds",
-    "Stack", "ctrl", "stack_ctrl_eval_table.rds",
-    "Stack", "10th", "stack_10th_eval_table.rds",
-    "Stack", "90th", "stack_90th_eval_table.rds"
-  ) %>%
-    mutate(path = file.path(RESULTS_PATH, "tahoe", file)) %>%
-    filter(file.exists(path))
-
-  read_tahoe_eval <- function(path, method, regime) {
-    print(path)
-    readRDS(path) %>%
-      as_tibble() %>%
-      transmute(
-        method = method,
-        regime = regime,
-        gene,
-        target = normalize_stack_target(source, target),
-        delta_NES = NES_TRUE - NES_FALSE
-      ) %>%
-      group_by(method, regime, gene, target) %>%
-      summarise(delta_NES = median(delta_NES, na.rm = TRUE), .groups = "drop")
-  }
-
-  tahoe_moa_delta_joined_df <- pmap_dfr(
-    tahoe_eval_specs %>% select(path, method, regime),
-    read_tahoe_eval
-  ) %>%
-    mutate(regime = if_else(regime == "ctrl", "Control", regime)) %>%
-    mutate(
-      method = factor(
-        method,
-        levels = c("Mean", "NetworkProp", "ProjectCor (Eigen)",
-                   "ProjectCor (GSVA)", "Orthos", "Stack")
-      ),
-      regime = factor(regime, levels = c("90th", "10th", "Control")),
-      drug_key = normalize_drug_name(gene)
-    ) %>%
-    left_join(tahoe_drug_metadata, by = "drug_key")
-
-  tahoe_unmatched_moa_drugs <- tahoe_moa_delta_joined_df %>%
-    filter(is.na(`moa-fine`)) %>%
-    distinct(gene) %>%
-    arrange(gene)
-
-  saveRDS(
-    tahoe_unmatched_moa_drugs,
-    file.path(RESULTS_PATH, "tahoe/tahoe_moa_delta_unmatched_drugs.rds")
-  )
-
-  tahoe_moa_delta_df <- tahoe_moa_delta_joined_df %>%
-    filter(
-      !is.na(`moa-fine`),
-      `moa-fine` != "unclear",
-      `moa-broad` %in% c("activator/agonist", "inhibitor/antagonist")
-    ) %>%
-    mutate(
-      moa_broad_group = factor(
-        clean_moa_broad_label(`moa-broad`),
-        levels = c("Inhibitor/\nAntagonist", "Activator/\nAgonist")
-      ),
-      moa_fine_label = clean_moa_fine_label(`moa-fine`)
-    )
-
-  saveRDS(
-    tahoe_moa_delta_df,
-    file.path(RESULTS_PATH, "tahoe/tahoe_moa_delta_nes_plot_df.rds")
-  )
-} else {
-  tahoe_unmatched_moa_drugs <- readRDS(file.path(RESULTS_PATH, "tahoe/tahoe_moa_delta_unmatched_drugs.rds"))
-  tahoe_moa_delta_df        <- readRDS(file.path(RESULTS_PATH, "tahoe/tahoe_moa_delta_nes_plot_df.rds"))
-}
-```
-
-```{r, fig.width=14, fig.height=10}
-moa_order <- tahoe_moa_delta_df %>%
-  filter(regime == "90th") %>%
-  group_by(moa_broad_group, moa_fine_label) %>%
-  summarise(median_delta_NES = median(delta_NES, na.rm = TRUE), .groups = "drop") %>%
-  group_by(moa_broad_group) %>%
-  arrange(desc(median_delta_NES)) %>%
-  summarise(moa_fine_label = list(moa_fine_label), .groups = "drop")
-
-moa_levels <- c(
-  rev(moa_order$moa_fine_label[[which(moa_order$moa_broad_group == "Activator/\nAgonist")]]),
-  rev(moa_order$moa_fine_label[[which(moa_order$moa_broad_group == "Inhibitor/\nAntagonist")]])
-)
-
-moa_label_counts <- tahoe_moa_delta_df %>%
-  group_by(moa_fine_label) %>%
-  summarise(n_drugs = n_distinct(gene), .groups = "drop")
-
-format_moa_axis_label <- function(x) {
-  n_drugs <- moa_label_counts$n_drugs[match(x, moa_label_counts$moa_fine_label)]
-  str_wrap(paste0(x, " (", n_drugs, ")"), width = 28)
-}
-
-ggplot(
-  tahoe_moa_delta_df %>%
-    mutate(moa_fine_label = factor(moa_fine_label, levels = moa_levels)),
-  aes(x = delta_NES, y = moa_fine_label)
-) +
-  geom_vline(xintercept = 0, color = "grey70", linewidth = 0.35) +
-  geom_boxplot(
-    aes(fill = regime),
-    outlier.shape = NA,
-    alpha = 0.65,
-    width = 0.55
-  ) +
-  ggbeeswarm::geom_quasirandom(
-    aes(color = method, group = moa_fine_label),
-    width = 0.18,
-    size = 0.6,
-    alpha = 0.25,
-    groupOnX = FALSE
-  ) +
-  facet_grid(
-    rows = vars(moa_broad_group),
-    cols = vars(regime),
-    scales = "free_y",
-    space = "free_y",
-    switch = "y"
-  ) +
-  scale_fill_brewer(palette = "Pastel1", guide = "none") +
-  scale_y_discrete(labels = format_moa_axis_label, position = "right") +
-  labs(
-    x = "Delta NES",
-    y = NULL,
-    color = "Method"
-  ) +
-  theme_bw(base_size = 18) +
-  theme(
-    panel.grid.minor = element_blank(),
-    axis.title.y = element_blank(),
-    strip.placement = "outside",
-    strip.background.y = element_blank(),
-    strip.text.y.left = element_text(size = 18, face = "bold", angle = 0),
-    legend.position = "right",
-    legend.text = element_text(size = 15),  
-    legend.title = element_text(size = 18),
-    axis.text = element_text(size = 18),
-    strip.text = element_text(size = 18)
-  )
-```
-
-```{r}
-ggsave(
-  file.path(PROJECT_PATH, "results/plots/tahoe_moa_fine_delta_NES_methods.png"),
-  width = 14,
-  height = 10,
-  dpi = 400
-)
-```
-
-## MOA Gain Heatmaps
-```{r}
-if (do_save_tahoe) {
-  tahoe_moa_gain_df <- tahoe_moa_delta_df %>%
-    select(method, regime, gene, target, moa_broad_group, moa_fine_label, delta_NES) %>%
-    pivot_wider(names_from = regime, values_from = delta_NES) %>%
-    mutate(
-      gain_10th = `10th` - Control,
-      gain_90th = `90th` - Control
-    ) %>%
-    pivot_longer(
-      c(gain_10th, gain_90th),
-      names_to = "comparison",
-      values_to = "gain"
-    ) %>%
-    filter(is.finite(gain)) %>%
-    group_by(comparison, moa_broad_group, moa_fine_label, method) %>%
-    summarise(median_gain = median(gain, na.rm = TRUE), .groups = "drop")
-
-  saveRDS(
-    tahoe_moa_gain_df,
-    file.path(RESULTS_PATH, "tahoe/tahoe_moa_gain_heatmap_df.rds")
-  )
-} else {
-  tahoe_moa_gain_df <- readRDS(file.path(RESULTS_PATH, "tahoe/tahoe_moa_gain_heatmap_df.rds"))
-}
-
-plot_gain_heatmap <- function(gain_df, comparison_name, title) {
-  gain_wide <- gain_df %>%
-    filter(comparison == comparison_name) %>%
-    select(moa_broad_group, moa_fine_label, method, median_gain) %>%
-    pivot_wider(names_from = method, values_from = median_gain) %>%
-    arrange(moa_broad_group, moa_fine_label)
-  
-  row_group <- gain_wide$moa_broad_group
-  row_group <- factor(row_group, levels = c("Inhibitor/\nAntagonist", "Activator/\nAgonist"))
-  gain_mat <- gain_wide %>%
-    select(-moa_broad_group) %>%
-    column_to_rownames("moa_fine_label") %>%
-    as.matrix()
-  
-  max_abs <- max(abs(gain_mat), na.rm = TRUE)
-  
-  Heatmap(
-    gain_mat,
-    name = "Median gain",
-    col = circlize::colorRamp2(c(-max_abs, 0, max_abs), c("#3b4cc0", "white", "#b40426")),
-    na_col = "grey90",
-    cluster_rows = TRUE,
-    show_row_dend = FALSE,
-    show_column_dend = FALSE,
-    cluster_columns = TRUE,
-    row_split = row_group,
-    row_gap = unit(5, "mm"),
-    cluster_row_slices = FALSE,
-    row_names_side = "right",
-    row_names_gp = gpar(fontsize = 17), 
-    column_names_rot = 45,
-    column_names_gp = gpar(fontsize = 17), 
-    column_title = title,
-    column_title_gp = gpar(fontsize = 17, fontface = "bold"), 
-    row_title_side = "left",
-    row_title_rot = 0,
-    row_title_gp = gpar(fontsize = 17, fontface = "bold"),
-    cell_fun = function(j, i, x, y, width, height, fill) {
-      value <- gain_mat[i, j]
-      if (is.finite(value)) {
-        grid::grid.text(sprintf("%.2f", value), x, y, gp = grid::gpar(fontsize = 14))
-      }
-    },
-    heatmap_legend_param = list(title = "Median\nDelta NES",
-                                title_gp = gpar(fontsize = 16, fontface = "bold"),
-                                labels_gp = gpar(fontsize = 15, col = "black"))
-  )
-}
-
-ht_10th <- plot_gain_heatmap(tahoe_moa_gain_df, "gain_10th", "10th - ctrl")
-ht_90th <- plot_gain_heatmap(tahoe_moa_gain_df, "gain_90th", "90th - ctrl")
-```
-
-```{r, fig.width=11, fig.height=10}
-draw(ht_10th)
-```
-
-```{r}
-png(file.path(PROJECT_PATH, "results/plots/tahoe_moa_gain_10th_minus_ctrl_heatmap.png"),
-    width = 11, height = 10, units = "in", res = 400)
-draw(ht_10th)
-dev.off()
-```
-
-```{r, fig.width=11, fig.height=10}
-draw(ht_90th)
-```
-
-```{r}
-png(file.path(PROJECT_PATH, "results/plots/tahoe_moa_gain_90th_minus_ctrl_heatmap.png"),
-    width = 11, height = 10, units = "in", res = 400)
-draw(ht_90th)
-dev.off()
-```
-
-## MOA Gain Lineplots
-
-### Version 1: Raw delta_NES per regime
-```{r, fig.width=14, fig.height=10}
-# Rebuild per-regime median delta_NES per (method, regime, moa_fine_label)
-tahoe_moa_regime_df <- tahoe_moa_delta_df %>%
-  group_by(method, regime, moa_broad_group, moa_fine_label) %>%
-  summarise(median_delta_NES = median(delta_NES, na.rm = TRUE), .groups = "drop") %>%
-  mutate(regime = factor(regime, levels = c("Control", "10th", "90th")))
-
-# Rank top/bottom 3 drug classes per method based on 90th - ctrl gain
-moa_gain_rank <- tahoe_moa_regime_df %>%
-  pivot_wider(names_from = regime, values_from = median_delta_NES) %>%
-  mutate(gain_90th = `90th` - Control) %>%
-  group_by(method) %>%
-  arrange(method, desc(gain_90th)) %>%
-  mutate(rank = row_number(), n = n()) %>%
-  mutate(highlight = case_when(
-    rank <= 3 ~ "top3",
-    rank > n - 3 ~ "bottom3",
-    TRUE ~ "other"
-  )) %>%
-  ungroup() %>%
-  select(method, moa_fine_label, highlight)
-
-tahoe_moa_regime_plot_df <- tahoe_moa_regime_df %>%
-  left_join(moa_gain_rank, by = c("method", "moa_fine_label"))
-
-highlight_labels_v1 <- tahoe_moa_regime_plot_df %>%
-  filter(highlight != "other", regime == "90th") %>%
-  select(method, moa_fine_label, regime, median_delta_NES, highlight)
-
-ggplot(tahoe_moa_regime_plot_df,
-       aes(x = regime, y = median_delta_NES, group = moa_fine_label)) +
-  geom_line(data = filter(tahoe_moa_regime_plot_df, highlight == "other"),
-            color = "grey80", linewidth = 0.4, alpha = 0.7) +
-  geom_line(data = filter(tahoe_moa_regime_plot_df, highlight == "top3"),
-            aes(color = moa_fine_label), linewidth = 1.2) +
-  geom_line(data = filter(tahoe_moa_regime_plot_df, highlight == "bottom3"),
-            aes(color = moa_fine_label), linewidth = 1.2, linetype = "dashed") +
-  geom_point(data = filter(tahoe_moa_regime_plot_df, highlight != "other"),
-             aes(color = moa_fine_label), size = 2.5) +
-  ggrepel::geom_text_repel(
-    data = highlight_labels_v1,
-    aes(label = moa_fine_label, color = moa_fine_label),
-    size = 3, nudge_x = 0.15, direction = "y", hjust = 0,
-    segment.size = 0.3, show.legend = FALSE
-  ) +
-  facet_wrap(~ method, scales = "free_y") +
-  scale_x_discrete(expand = expansion(mult = c(0.05, 0.35))) +
-  labs(
-    title = "Median delta NES by regime — top/bottom 3 drug classes per method",
-    subtitle = "Solid = top 3 improving (90th − ctrl), dashed = bottom 3 worsening",
-    x = "Regime", y = "Median delta NES", color = "Drug class"
-  ) +
-  theme_bw(base_size = 13) +
-  theme(legend.position = "none", strip.text = element_text(face = "bold"))
-```
-
-```{r}
-ggsave(
-  file.path(PROJECT_PATH, "results/plots/tahoe_moa_gain_lineplot_raw_deltaNES.png"),
-  width = 14, height = 10, dpi = 300
-)
-```
-
-### Version 2: Gain relative to ctrl (0 at ctrl)
-```{r, fig.width=14, fig.height=10}
-tahoe_moa_gain_long_df <- tahoe_moa_regime_df %>%
-  pivot_wider(names_from = regime, values_from = median_delta_NES) %>%
-  mutate(
-    gain_10th = `10th` - Control,
-    gain_90th = `90th` - Control
-  ) %>%
-  pivot_longer(
-    c(gain_10th, gain_90th),
-    names_to = "comparison",
-    values_to = "gain"
-  ) %>%
-  mutate(
-    x_label = recode(comparison, gain_10th = "10th", gain_90th = "90th"),
-    x_label = factor(x_label, levels = c("10th", "90th"))
-  ) %>%
-  bind_rows(
-    distinct(., method, moa_broad_group, moa_fine_label) %>%
-      mutate(x_label = factor("ctrl", levels = c("ctrl", "10th", "90th")), gain = 0)
-  ) %>%
-  mutate(x_label = factor(x_label, levels = c("ctrl", "10th", "90th")))
-
-# Reuse same highlight assignments from Version 1
-tahoe_moa_gain_long_df <- tahoe_moa_gain_long_df %>%
-  left_join(moa_gain_rank, by = c("method", "moa_fine_label"))
-
-highlight_labels_v2 <- tahoe_moa_gain_long_df %>%
-  filter(highlight != "other", x_label == "90th") %>%
-  select(method, moa_fine_label, x_label, gain, highlight)
-
-ggplot(tahoe_moa_gain_long_df,
-       aes(x = x_label, y = gain, group = moa_fine_label)) +
-  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50") +
-  geom_line(data = filter(tahoe_moa_gain_long_df, highlight == "other"),
-            color = "grey80", linewidth = 0.4, alpha = 0.7) +
-  geom_line(data = filter(tahoe_moa_gain_long_df, highlight == "top3"),
-            aes(color = moa_fine_label), linewidth = 1.2) +
-  geom_line(data = filter(tahoe_moa_gain_long_df, highlight == "bottom3"),
-            aes(color = moa_fine_label), linewidth = 1.2, linetype = "dashed") +
-  geom_point(data = filter(tahoe_moa_gain_long_df, highlight != "other"),
-             aes(color = moa_fine_label), size = 2.5) +
-  ggrepel::geom_text_repel(
-    data = highlight_labels_v2,
-    aes(label = moa_fine_label, color = moa_fine_label),
-    size = 3, nudge_x = 0.15, direction = "y", hjust = 0,
-    segment.size = 0.3, show.legend = FALSE
-  ) +
-  facet_wrap(~ method, scales = "free_y") +
-  scale_x_discrete(expand = expansion(mult = c(0.05, 0.35))) +
-  labs(
-    title = "Gain in delta NES relative to ctrl — top/bottom 3 drug classes per method",
-    subtitle = "Solid = top 3 improving (90th − ctrl), dashed = bottom 3 worsening; all lines anchored at 0 = ctrl",
-    x = "Regime", y = "Gain (delta NES vs. ctrl)", color = "Drug class"
-  ) +
-  theme_bw(base_size = 13) +
-  theme(legend.position = "none", strip.text = element_text(face = "bold"))
-```
-
-```{r}
-ggsave(
-  file.path(PROJECT_PATH, "results/plots/tahoe_moa_gain_lineplot_relative_to_ctrl.png"),
-  width = 14, height = 10, dpi = 300
-)
-```
-
-## MOA TI Quadrant Scatter
-```{r}
-tahoe_trade_metrics <- readRDS(file.path(PROJECT_PATH,"results/plots/trade_metric_correlations/tahoe_projectCor/context_trade_metrics.rds"))
-
-tahoe_source_ti <- tahoe_trade_metrics %>%
-  filter(context_key == normalize_drug_name("NCI-H23")) %>%
-  mutate(drug_key = normalize_drug_name(drug)) %>%
-  select(drug_key, source_TI = TI) %>%
-  distinct(drug_key, .keep_all = TRUE)
-
-tahoe_target_ti <- tahoe_trade_metrics %>%
-  mutate(drug_key = normalize_drug_name(drug)) %>%
-  select(target_key = context_key, drug_key, target_TI = TI) %>%
-  distinct(target_key, drug_key, .keep_all = TRUE)
-
-target_keys_to_keep <- tahoe_moa_delta_df %>%
-  distinct(target_key = normalize_drug_name(target)) %>%
-  pull(target_key)
-drug_keys_to_keep <- tahoe_moa_delta_df %>%
-  distinct(drug_key) %>% 
-  pull(drug_key)
-```
-
-```{r}
-source_target_ti_df <- tahoe_target_ti %>%
-  left_join(tahoe_source_ti, by = "drug_key") %>%
-  filter(
-    is.finite(source_TI),
-    is.finite(target_TI),
-    target_key != normalize_drug_name("NCI-H23"),
-    target_key %in% target_keys_to_keep,
-    drug_key %in% drug_keys_to_keep
-  )
-
-ggplot(source_target_ti_df, aes(x = source_TI, y = target_TI)) +
-  geom_abline(slope = 1, intercept = 0, color = "grey70", linewidth = 0.5, linetype = "dashed") +
-  geom_point(aes(fill = target_key), shape = 21, color = "grey20", alpha = 0.75, size = 2.2) +
-  scale_fill_brewer(palette = "Set2") +
-  labs(
-    x = "Source TI (NCI-H23)",
-    y = "Target TI",
-    fill = "Target cell line"
-  ) +
-  theme_bw(base_size = 16) +
-  theme(
-    panel.grid.minor = element_blank(),
-    legend.position = "right"
-  )
-
-```
-
-
-```{r}
-ggsave(
-  file.path(PROJECT_PATH, "results/plots/tahoe_source_target_TI_correlation.png"),
-  width = 10,
-  height = 10,
-  dpi = 400
-)
-```
-```{r}
-drug_order <- source_target_ti_df %>%
-  group_by(drug_key) %>%
-  summarise(median_target_TI = median(target_TI, na.rm = TRUE), .groups = "drop") %>%
-  arrange(desc(median_target_TI)) %>%
-  summarise(drug_key = list(drug_key), .groups = "drop")
-
-drug_levels <- drug_order$drug_key[[1]]
-ggplot(source_target_ti_df %>%
-    mutate(drug_key = factor(drug_key, levels = drug_levels)), aes(x = source_TI, y = target_TI)) +
-  geom_abline(slope = 1, intercept = 0, color = "grey70", linewidth = 0.5, linetype = "dashed") +
-  geom_point(aes(fill = drug_key), shape = 21, color = "grey20", alpha = 0.75, size = 2.2) +
-  # scale_fill_brewer(palette = "Set2") +
-  labs(
-    x = "Source TI (NCI-H23)",
-    y = "Target TI",
-    fill = "Drug"
-  ) +
-  theme_bw(base_size = 16) +
-  theme(
-    panel.grid.minor = element_blank(),
-    legend.position = "right"
-  )
-```
-
-```{r}
-if (do_save_tahoe) {
-  tahoe_moa_ti_df <- tahoe_moa_delta_df %>%
-    mutate(target_key = normalize_drug_name(target)) %>%
-    left_join(tahoe_source_ti, by = "drug_key") %>%
-    left_join(tahoe_target_ti, by = c("target_key", "drug_key")) %>%
-    mutate(delta_TI = target_TI - source_TI)
-
-  tahoe_moa_ti_summary_df <- tahoe_moa_ti_df %>%
-    filter(
-      is.finite(delta_NES),
-      is.finite(source_TI),
-      is.finite(target_TI),
-      is.finite(delta_TI)
-    ) %>%
-    group_by(regime, moa_broad_group, `moa-fine`, moa_fine_label) %>%
-    summarise(
-      median_delta_NES = median(delta_NES, na.rm = TRUE),
-      median_source_TI = median(source_TI, na.rm = TRUE),
-      median_target_TI = median(target_TI, na.rm = TRUE),
-      median_delta_TI = median(delta_TI, na.rm = TRUE),
-      n_drugs = n_distinct(gene),
-      .groups = "drop"
-    )
-
-  saveRDS(
-    tahoe_moa_ti_summary_df,
-    file.path(RESULTS_PATH, "tahoe/tahoe_moa_ti_quadrant_summary_df.rds")
-  )
-} else {
-  tahoe_moa_ti_summary_df <- readRDS(file.path(RESULTS_PATH, "tahoe/tahoe_moa_ti_quadrant_summary_df.rds"))
-}
-
-plot_moa_ti_quadrant <- function(df, x_col, x_lab, title) {
-  moa_legend_order <- df %>%
-    filter(regime == "90th") %>%
-    arrange(desc(median_delta_NES)) %>%
-    pull(`moa-fine`)
-  moa_legend_order <- c(moa_legend_order, setdiff(unique(df$`moa-fine`), moa_legend_order))
-  
-  plot_df <- df %>%
-    mutate(`moa-fine` = factor(`moa-fine`, levels = moa_legend_order))
-  
-  size_breaks <- function(lims) {
-    candidates <- c(1, 2, 3, 5, 7, 10, 15, 20, 30, 50)
-    candidates[candidates >= ceiling(lims[1]) & candidates <= floor(lims[2])]
-  }
-  fit_stats <- df %>%
-    filter(is.finite(.data[[x_col]]), is.finite(median_delta_NES)) %>%
-    group_by(regime) %>%
-    group_modify(function(dat, key) {
-      dat <- dat %>% mutate(.x_value = .data[[x_col]])
-      if (nrow(dat) < 3 || n_distinct(dat$.x_value) < 2 || n_distinct(dat$median_delta_NES) < 2) {
-        return(tibble(label = "R2 = NA\np = NA"))
-      }
-      fit <- lm(median_delta_NES ~ .x_value, data = dat)
-      fit_summary <- summary(fit)
-      tibble(
-        label = sprintf(
-          "R2 = %.2f\np = %.2g",
-          fit_summary$r.squared,
-          coef(fit_summary)[".x_value", "Pr(>|t|)"]
-        )
-      )
-    }) %>%
-    ungroup()
-  
-  ggplot(plot_df, aes(x = .data[[x_col]], y = median_delta_NES)) +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "grey55", linewidth = 0.45) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "grey55", linewidth = 0.45) +
-    geom_hline(yintercept = 0, color = "grey80", linewidth = 0.35) +
-    geom_smooth(method = "lm", se = FALSE, color = "black", linewidth = 0.55) +
-    geom_point(aes(size = n_drugs, fill = `moa-fine`), shape = 21, color = "grey20", alpha = 0.82) +
-    geom_text(
-      data = fit_stats,
-      aes(x = Inf, y = Inf, label = label),
-      inherit.aes = FALSE,
-      hjust = 1.08,
-      vjust = 1.2,
-      size = 4.2
-    ) +
-    facet_grid(. ~ regime) +
-    scale_size(range = c(2, 8), breaks = size_breaks) +
-    labs(
-      title = title,
-      x = x_lab,
-      y = "Median delta NES",
-      fill = "MOA",
-      size = "N drugs"
-    ) +
-    theme_bw(base_size = 16) +
-    theme(
-      panel.grid.minor = element_blank(),
-      legend.position = "right",
-      strip.text = element_text(size = 16)
-    )
-}
-
-source_ti_quadrant <- plot_moa_ti_quadrant(
-  tahoe_moa_ti_summary_df,
-  "median_source_TI",
-  "Median source TI",
-  "MOA-level source TI vs delta NES"
-)
-
-target_ti_quadrant <- plot_moa_ti_quadrant(
-  tahoe_moa_ti_summary_df,
-  "median_target_TI",
-  "Median target TI",
-  "MOA-level target TI vs delta NES"
-)
-
-delta_ti_quadrant <- plot_moa_ti_quadrant(
-  tahoe_moa_ti_summary_df,
-  "median_delta_TI",
-  "Median delta TI",
-  "MOA-level delta TI vs delta NES"
-)
-```
-
-```{r, fig.width=14, fig.height=6}
-source_ti_quadrant
-```
-
-```{r}
-ggsave(
-  file.path(PROJECT_PATH, "results/plots/tahoe_moa_source_TI_delta_NES_quadrant.png"),
-  source_ti_quadrant,
-  width = 14,
-  height = 6,
-  dpi = 400
-)
-```
-
-```{r, fig.width=14, fig.height=6}
-target_ti_quadrant
-```
-
-```{r}
-ggsave(
-  file.path(PROJECT_PATH, "results/plots/tahoe_moa_target_TI_delta_NES_quadrant.png"),
-  target_ti_quadrant,
-  width = 14,
-  height = 6,
-  dpi = 400
-)
-```
-
-```{r, fig.width=14, fig.height=6}
-delta_ti_quadrant
-```
-
-```{r}
-ggsave(
-  file.path(PROJECT_PATH, "results/plots/tahoe_moa_delta_TI_delta_NES_quadrant.png"),
-  delta_ti_quadrant,
-  width = 14,
-  height = 6,
-  dpi = 400
-)
-```
 
 ## Control {.tabset}
 ```{r}
@@ -1639,7 +948,7 @@ ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_90th_paired.png"),
 
 ## Trade
 ```{r}
-trade_metrics_10th <- readRDS(file.path(RESULTS_PATH, "tahoe/trade_metric_correlations/projectCor/10th_projectcor_eigen_trade_joined.rds"))
+trade_metrics_10th <- readRDS(file.path(PROJECT_PATH, "results/plots/trade_metric_correlations/tahoe/10th_projectcor_eigen_eval_table_trade_joined.rds"))
 trade_metrics_10th
 ```
 ```{r}
@@ -2253,6 +1562,699 @@ ggplot(summary_df,
 ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_90th_paired.png"),
   width = 8,
   height = 5,
+  dpi = 400
+)
+```
+
+# Tahoe MOA {.tabset}
+
+## Delta NES Across Methods
+```{r}
+tahoe_metadata_path <- file.path(
+  Sys.getenv("AGED"),
+  "CBMrepositoryData/perturbational_data/tahoe/metadata/drug_metadata.parquet"
+)
+
+normalize_drug_name <- function(x) {
+  x %>%
+    str_to_lower() %>%
+    str_replace_all("[^[:alnum:]]+", "")
+}
+
+normalize_stack_target <- function(source, target) {
+  if_else(
+    target == "target_context" & str_detect(source, "^nci_h23_"),
+    str_remove(source, "^nci_h23_"),
+    target
+  )
+}
+
+clean_moa_fine_label <- function(x) {
+  x %>%
+    str_remove(regex("\\s+(agonist|activator|inhibitor|antagonist)$", ignore_case = TRUE)) %>%
+    str_squish()
+}
+
+clean_moa_broad_label <- function(x) {
+  recode(
+    x,
+    "activator/agonist" = "Activator/\nAgonist",
+    "inhibitor/antagonist" = "Inhibitor/\nAntagonist"
+  )
+}
+
+if (do_save_tahoe) {
+  tahoe_drug_metadata <- arrow::read_parquet(tahoe_metadata_path) %>%
+    as_tibble() %>%
+    select(drug, `moa-broad`, `moa-fine`) %>%
+    distinct() %>%
+    mutate(drug_key = normalize_drug_name(drug)) %>%
+    distinct(drug_key, .keep_all = TRUE)
+
+  tahoe_eval_specs <- tribble(
+    ~method, ~regime, ~file,
+    "Mean", "ctrl", "ctrl_mean_eval_table.rds",
+    "Mean", "10th", "ctrl_10th_mean_eval_table.rds",
+    "Mean", "90th", "ctrl_90th_mean_eval_table.rds",
+    "NetworkProp", "ctrl", "ctrl_networkprop_eval_table.rds",
+    "NetworkProp", "10th", "network_prop_10th_eval_table.rds",
+    "NetworkProp", "90th", "network_prop_90th_eval_table.rds",
+    "ProjectCor (Eigen)", "ctrl", "ctrl_projectcor_eigen_eval_table.rds",
+    "ProjectCor (Eigen)", "10th", "10th_projectcor_eigen_eval_table.rds",
+    "ProjectCor (Eigen)", "90th", "90th_projectcor_eigen_eval_table.rds",
+    "ProjectCor (GSVA)", "ctrl", "ctrl_projectcor_gsva_eval_table.rds",
+    "ProjectCor (GSVA)", "10th", "10th_projectcor_gsva_eval_table.rds",
+    "ProjectCor (GSVA)", "90th", "90th_projectcor_gsva_eval_table.rds",
+    "Orthos", "ctrl", "ctrl_orthos_residual_eval_table.rds",
+    "Stack", "ctrl", "stack_ctrl_eval_table.rds",
+    "Stack", "10th", "stack_10th_eval_table.rds",
+    "Stack", "90th", "stack_90th_eval_table.rds"
+  ) %>%
+    mutate(path = file.path(RESULTS_PATH, "tahoe", file)) %>%
+    filter(file.exists(path))
+
+  read_tahoe_eval <- function(path, method, regime) {
+    print(path)
+    readRDS(path) %>%
+      as_tibble() %>%
+      transmute(
+        method = method,
+        regime = regime,
+        gene,
+        target = normalize_stack_target(source, target),
+        delta_NES = NES_TRUE - NES_FALSE
+      ) %>%
+      group_by(method, regime, gene, target) %>%
+      summarise(delta_NES = median(delta_NES, na.rm = TRUE), .groups = "drop")
+  }
+
+  tahoe_moa_delta_joined_df <- pmap_dfr(
+    tahoe_eval_specs %>% select(path, method, regime),
+    read_tahoe_eval
+  ) %>%
+    mutate(regime = if_else(regime == "ctrl", "Control", regime)) %>%
+    mutate(
+      method = factor(
+        method,
+        levels = c("Mean", "NetworkProp", "ProjectCor (Eigen)",
+                   "ProjectCor (GSVA)", "Orthos", "Stack")
+      ),
+      regime = factor(regime, levels = c("90th", "10th", "Control")),
+      drug_key = normalize_drug_name(gene)
+    ) %>%
+    left_join(tahoe_drug_metadata, by = "drug_key")
+
+  tahoe_unmatched_moa_drugs <- tahoe_moa_delta_joined_df %>%
+    filter(is.na(`moa-fine`)) %>%
+    distinct(gene) %>%
+    arrange(gene)
+
+  saveRDS(
+    tahoe_unmatched_moa_drugs,
+    file.path(RESULTS_PATH, "tahoe/tahoe_moa_delta_unmatched_drugs.rds")
+  )
+
+  tahoe_moa_delta_df <- tahoe_moa_delta_joined_df %>%
+    filter(
+      !is.na(`moa-fine`),
+      `moa-fine` != "unclear",
+      `moa-broad` %in% c("activator/agonist", "inhibitor/antagonist")
+    ) %>%
+    mutate(
+      moa_broad_group = factor(
+        clean_moa_broad_label(`moa-broad`),
+        levels = c("Inhibitor/\nAntagonist", "Activator/\nAgonist")
+      ),
+      moa_fine_label = clean_moa_fine_label(`moa-fine`)
+    )
+
+  saveRDS(
+    tahoe_moa_delta_df,
+    file.path(RESULTS_PATH, "tahoe/tahoe_moa_delta_nes_plot_df.rds")
+  )
+} else {
+  tahoe_unmatched_moa_drugs <- readRDS(file.path(RESULTS_PATH, "tahoe/tahoe_moa_delta_unmatched_drugs.rds"))
+  tahoe_moa_delta_df        <- readRDS(file.path(RESULTS_PATH, "tahoe/tahoe_moa_delta_nes_plot_df.rds"))
+}
+```
+
+```{r, fig.width=14, fig.height=10}
+moa_order <- tahoe_moa_delta_df %>%
+  filter(regime == "90th") %>%
+  group_by(moa_broad_group, moa_fine_label) %>%
+  summarise(median_delta_NES = median(delta_NES, na.rm = TRUE), .groups = "drop") %>%
+  group_by(moa_broad_group) %>%
+  arrange(desc(median_delta_NES)) %>%
+  summarise(moa_fine_label = list(moa_fine_label), .groups = "drop")
+
+moa_levels <- c(
+  rev(moa_order$moa_fine_label[[which(moa_order$moa_broad_group == "Activator/\nAgonist")]]),
+  rev(moa_order$moa_fine_label[[which(moa_order$moa_broad_group == "Inhibitor/\nAntagonist")]])
+)
+
+moa_label_counts <- tahoe_moa_delta_df %>%
+  group_by(moa_fine_label) %>%
+  summarise(n_drugs = n_distinct(gene), .groups = "drop")
+
+format_moa_axis_label <- function(x) {
+  n_drugs <- moa_label_counts$n_drugs[match(x, moa_label_counts$moa_fine_label)]
+  str_wrap(paste0(x, " (", n_drugs, ")"), width = 28)
+}
+
+ggplot(
+  tahoe_moa_delta_df %>%
+    mutate(moa_fine_label = factor(moa_fine_label, levels = moa_levels)),
+  aes(x = delta_NES, y = moa_fine_label)
+) +
+  geom_vline(xintercept = 0, color = "grey70", linewidth = 0.35) +
+  geom_boxplot(
+    aes(fill = regime),
+    outlier.shape = NA,
+    alpha = 0.65,
+    width = 0.55
+  ) +
+  ggbeeswarm::geom_quasirandom(
+    aes(color = method, group = moa_fine_label),
+    width = 0.18,
+    size = 0.6,
+    alpha = 0.25,
+    groupOnX = FALSE
+  ) +
+  facet_grid(
+    rows = vars(moa_broad_group),
+    cols = vars(regime),
+    scales = "free_y",
+    space = "free_y",
+    switch = "y"
+  ) +
+  scale_fill_brewer(palette = "Pastel1", guide = "none") +
+  scale_y_discrete(labels = format_moa_axis_label, position = "right") +
+  labs(
+    x = "Delta NES",
+    y = NULL,
+    color = "Method"
+  ) +
+  theme_bw(base_size = 18) +
+  theme(
+    panel.grid.minor = element_blank(),
+    axis.title.y = element_blank(),
+    strip.placement = "outside",
+    strip.background.y = element_blank(),
+    strip.text.y.left = element_text(size = 18, face = "bold", angle = 0),
+    legend.position = "right",
+    legend.text = element_text(size = 15),  
+    legend.title = element_text(size = 18),
+    axis.text = element_text(size = 18),
+    strip.text = element_text(size = 18)
+  )
+```
+
+```{r}
+ggsave(
+  file.path(PROJECT_PATH, "results/plots/tahoe_moa_fine_delta_NES_methods.png"),
+  width = 14,
+  height = 10,
+  dpi = 400
+)
+```
+
+## Gain Heatmaps
+```{r}
+if (do_save_tahoe) {
+  tahoe_moa_gain_df <- tahoe_moa_delta_df %>%
+    select(method, regime, gene, target, moa_broad_group, moa_fine_label, delta_NES) %>%
+    pivot_wider(names_from = regime, values_from = delta_NES) %>%
+    mutate(
+      gain_10th = `10th` - Control,
+      gain_90th = `90th` - Control
+    ) %>%
+    pivot_longer(
+      c(gain_10th, gain_90th),
+      names_to = "comparison",
+      values_to = "gain"
+    ) %>%
+    filter(is.finite(gain)) %>%
+    group_by(comparison, moa_broad_group, moa_fine_label, method) %>%
+    summarise(median_gain = median(gain, na.rm = TRUE), .groups = "drop")
+
+  saveRDS(
+    tahoe_moa_gain_df,
+    file.path(RESULTS_PATH, "tahoe/tahoe_moa_gain_heatmap_df.rds")
+  )
+} else {
+  tahoe_moa_gain_df <- readRDS(file.path(RESULTS_PATH, "tahoe/tahoe_moa_gain_heatmap_df.rds"))
+}
+
+plot_gain_heatmap <- function(gain_df, comparison_name, title) {
+  gain_wide <- gain_df %>%
+    filter(comparison == comparison_name) %>%
+    select(moa_broad_group, moa_fine_label, method, median_gain) %>%
+    pivot_wider(names_from = method, values_from = median_gain) %>%
+    arrange(moa_broad_group, moa_fine_label)
+  
+  row_group <- gain_wide$moa_broad_group
+  row_group <- factor(row_group, levels = c("Inhibitor/\nAntagonist", "Activator/\nAgonist"))
+  gain_mat <- gain_wide %>%
+    select(-moa_broad_group) %>%
+    column_to_rownames("moa_fine_label") %>%
+    as.matrix()
+  
+  max_abs <- max(abs(gain_mat), na.rm = TRUE)
+  
+  Heatmap(
+    gain_mat,
+    name = "Median gain",
+    col = circlize::colorRamp2(c(-max_abs, 0, max_abs), c("#3b4cc0", "white", "#b40426")),
+    na_col = "grey90",
+    cluster_rows = TRUE,
+    show_row_dend = FALSE,
+    show_column_dend = FALSE,
+    cluster_columns = TRUE,
+    row_split = row_group,
+    row_gap = unit(5, "mm"),
+    cluster_row_slices = FALSE,
+    row_names_side = "right",
+    row_names_gp = gpar(fontsize = 17), 
+    column_names_rot = 45,
+    column_names_gp = gpar(fontsize = 17), 
+    column_title = title,
+    column_title_gp = gpar(fontsize = 17, fontface = "bold"), 
+    row_title_side = "left",
+    row_title_rot = 0,
+    row_title_gp = gpar(fontsize = 17, fontface = "bold"),
+    cell_fun = function(j, i, x, y, width, height, fill) {
+      value <- gain_mat[i, j]
+      if (is.finite(value)) {
+        grid::grid.text(sprintf("%.2f", value), x, y, gp = grid::gpar(fontsize = 14))
+      }
+    },
+    heatmap_legend_param = list(title = "Median\nDelta NES",
+                                title_gp = gpar(fontsize = 16, fontface = "bold"),
+                                labels_gp = gpar(fontsize = 15, col = "black"))
+  )
+}
+
+ht_10th <- plot_gain_heatmap(tahoe_moa_gain_df, "gain_10th", "10th - ctrl")
+ht_90th <- plot_gain_heatmap(tahoe_moa_gain_df, "gain_90th", "90th - ctrl")
+```
+
+```{r, fig.width=11, fig.height=10}
+draw(ht_10th)
+```
+
+```{r}
+png(file.path(PROJECT_PATH, "results/plots/tahoe_moa_gain_10th_minus_ctrl_heatmap.png"),
+    width = 11, height = 10, units = "in", res = 400)
+draw(ht_10th)
+dev.off()
+```
+
+```{r, fig.width=11, fig.height=10}
+draw(ht_90th)
+```
+
+```{r}
+png(file.path(PROJECT_PATH, "results/plots/tahoe_moa_gain_90th_minus_ctrl_heatmap.png"),
+    width = 11, height = 10, units = "in", res = 400)
+draw(ht_90th)
+dev.off()
+```
+
+## Gain Lineplots {.tabset}
+
+### Version 1: Raw delta_NES per regime
+```{r, fig.width=14, fig.height=10}
+# Rebuild per-regime median delta_NES per (method, regime, moa_fine_label)
+tahoe_moa_regime_df <- tahoe_moa_delta_df %>%
+  group_by(method, regime, moa_broad_group, moa_fine_label) %>%
+  summarise(median_delta_NES = median(delta_NES, na.rm = TRUE), .groups = "drop") %>%
+  mutate(regime = factor(regime, levels = c("Control", "10th", "90th")))
+
+# Rank top/bottom 3 drug classes per method based on 90th - ctrl gain
+moa_gain_rank <- tahoe_moa_regime_df %>%
+  pivot_wider(names_from = regime, values_from = median_delta_NES) %>%
+  mutate(gain_90th = `90th` - Control) %>%
+  group_by(method) %>%
+  arrange(method, desc(gain_90th)) %>%
+  mutate(rank = row_number(), n = n()) %>%
+  mutate(highlight = case_when(
+    rank <= 3 ~ "top3",
+    rank > n - 3 ~ "bottom3",
+    TRUE ~ "other"
+  )) %>%
+  ungroup() %>%
+  select(method, moa_fine_label, highlight)
+
+tahoe_moa_regime_plot_df <- tahoe_moa_regime_df %>%
+  left_join(moa_gain_rank, by = c("method", "moa_fine_label"))
+
+highlight_labels_v1 <- tahoe_moa_regime_plot_df %>%
+  filter(highlight != "other", regime == "90th") %>%
+  select(method, moa_fine_label, regime, median_delta_NES, highlight)
+
+ggplot(tahoe_moa_regime_plot_df,
+       aes(x = regime, y = median_delta_NES, group = moa_fine_label)) +
+  geom_line(data = filter(tahoe_moa_regime_plot_df, highlight == "other"),
+            color = "grey80", linewidth = 0.4, alpha = 0.7) +
+  geom_line(data = filter(tahoe_moa_regime_plot_df, highlight == "top3"),
+            aes(color = moa_fine_label), linewidth = 1.2) +
+  geom_line(data = filter(tahoe_moa_regime_plot_df, highlight == "bottom3"),
+            aes(color = moa_fine_label), linewidth = 1.2, linetype = "dashed") +
+  geom_point(data = filter(tahoe_moa_regime_plot_df, highlight != "other"),
+             aes(color = moa_fine_label), size = 2.5) +
+  ggrepel::geom_text_repel(
+    data = highlight_labels_v1,
+    aes(label = moa_fine_label, color = moa_fine_label),
+    size = 3, nudge_x = 0.15, direction = "y", hjust = 0,
+    segment.size = 0.3, show.legend = FALSE
+  ) +
+  facet_wrap(~ method, scales = "free_y") +
+  scale_x_discrete(expand = expansion(mult = c(0.05, 0.35))) +
+  labs(
+    title = "Median delta NES by regime — top/bottom 3 drug classes per method",
+    subtitle = "Solid = top 3 improving (90th − ctrl), dashed = bottom 3 worsening",
+    x = "Regime", y = "Median delta NES", color = "Drug class"
+  ) +
+  theme_bw(base_size = 13) +
+  theme(legend.position = "none", strip.text = element_text(face = "bold"))
+```
+
+```{r}
+ggsave(
+  file.path(PROJECT_PATH, "results/plots/tahoe_moa_gain_lineplot_raw_deltaNES.png"),
+  width = 14, height = 10, dpi = 300
+)
+```
+
+### Version 2: Gain relative to ctrl (0 at ctrl)
+```{r, fig.width=14, fig.height=10}
+tahoe_moa_gain_long_df <- tahoe_moa_regime_df %>%
+  pivot_wider(names_from = regime, values_from = median_delta_NES) %>%
+  mutate(
+    gain_10th = `10th` - Control,
+    gain_90th = `90th` - Control
+  ) %>%
+  pivot_longer(
+    c(gain_10th, gain_90th),
+    names_to = "comparison",
+    values_to = "gain"
+  ) %>%
+  mutate(
+    x_label = recode(comparison, gain_10th = "10th", gain_90th = "90th"),
+    x_label = factor(x_label, levels = c("10th", "90th"))
+  ) %>%
+  bind_rows(
+    distinct(., method, moa_broad_group, moa_fine_label) %>%
+      mutate(x_label = factor("ctrl", levels = c("ctrl", "10th", "90th")), gain = 0)
+  ) %>%
+  mutate(x_label = factor(x_label, levels = c("ctrl", "10th", "90th")))
+
+# Reuse same highlight assignments from Version 1
+tahoe_moa_gain_long_df <- tahoe_moa_gain_long_df %>%
+  left_join(moa_gain_rank, by = c("method", "moa_fine_label"))
+
+highlight_labels_v2 <- tahoe_moa_gain_long_df %>%
+  filter(highlight != "other", x_label == "90th") %>%
+  select(method, moa_fine_label, x_label, gain, highlight)
+
+ggplot(tahoe_moa_gain_long_df,
+       aes(x = x_label, y = gain, group = moa_fine_label)) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50") +
+  geom_line(data = filter(tahoe_moa_gain_long_df, highlight == "other"),
+            color = "grey80", linewidth = 0.4, alpha = 0.7) +
+  geom_line(data = filter(tahoe_moa_gain_long_df, highlight == "top3"),
+            aes(color = moa_fine_label), linewidth = 1.2) +
+  geom_line(data = filter(tahoe_moa_gain_long_df, highlight == "bottom3"),
+            aes(color = moa_fine_label), linewidth = 1.2, linetype = "dashed") +
+  geom_point(data = filter(tahoe_moa_gain_long_df, highlight != "other"),
+             aes(color = moa_fine_label), size = 2.5) +
+  ggrepel::geom_text_repel(
+    data = highlight_labels_v2,
+    aes(label = moa_fine_label, color = moa_fine_label),
+    size = 3, nudge_x = 0.15, direction = "y", hjust = 0,
+    segment.size = 0.3, show.legend = FALSE
+  ) +
+  facet_wrap(~ method, scales = "free_y") +
+  scale_x_discrete(expand = expansion(mult = c(0.05, 0.35))) +
+  labs(
+    title = "Gain in delta NES relative to ctrl — top/bottom 3 drug classes per method",
+    subtitle = "Solid = top 3 improving (90th − ctrl), dashed = bottom 3 worsening; all lines anchored at 0 = ctrl",
+    x = "Regime", y = "Gain (delta NES vs. ctrl)", color = "Drug class"
+  ) +
+  theme_bw(base_size = 13) +
+  theme(legend.position = "none", strip.text = element_text(face = "bold"))
+```
+
+```{r}
+ggsave(
+  file.path(PROJECT_PATH, "results/plots/tahoe_moa_gain_lineplot_relative_to_ctrl.png"),
+  width = 14, height = 10, dpi = 300
+)
+```
+
+## TI Quadrant Scatter
+```{r}
+tahoe_trade_metrics <- readRDS(file.path(PROJECT_PATH,"results/plots/trade_metric_correlations/tahoe/context_trade_metrics.rds"))
+
+tahoe_source_ti <- tahoe_trade_metrics %>%
+  filter(context_key == normalize_drug_name("NCI-H23")) %>%
+  mutate(drug_key = normalize_drug_name(drug)) %>%
+  select(drug_key, source_TI = TI) %>%
+  distinct(drug_key, .keep_all = TRUE)
+
+tahoe_target_ti <- tahoe_trade_metrics %>%
+  mutate(drug_key = normalize_drug_name(drug)) %>%
+  select(target_key = context_key, drug_key, target_TI = TI) %>%
+  distinct(target_key, drug_key, .keep_all = TRUE)
+
+target_keys_to_keep <- tahoe_moa_delta_df %>%
+  distinct(target_key = normalize_drug_name(target)) %>%
+  pull(target_key)
+drug_keys_to_keep <- tahoe_moa_delta_df %>%
+  distinct(drug_key) %>% 
+  pull(drug_key)
+```
+
+```{r}
+source_target_ti_df <- tahoe_target_ti %>%
+  left_join(tahoe_source_ti, by = "drug_key") %>%
+  filter(
+    is.finite(source_TI),
+    is.finite(target_TI),
+    target_key != normalize_drug_name("NCI-H23"),
+    target_key %in% target_keys_to_keep,
+    drug_key %in% drug_keys_to_keep
+  )
+
+ggplot(source_target_ti_df, aes(x = source_TI, y = target_TI)) +
+  geom_abline(slope = 1, intercept = 0, color = "grey70", linewidth = 0.5, linetype = "dashed") +
+  geom_point(aes(fill = target_key), shape = 21, color = "grey20", alpha = 0.75, size = 2.2) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    x = "Source TI (NCI-H23)",
+    y = "Target TI",
+    fill = "Target cell line"
+  ) +
+  theme_bw(base_size = 16) +
+  theme(
+    panel.grid.minor = element_blank(),
+    legend.position = "right"
+  )
+
+```
+
+
+```{r}
+ggsave(
+  file.path(PROJECT_PATH, "results/plots/tahoe_source_target_TI_correlation.png"),
+  width = 10,
+  height = 10,
+  dpi = 400
+)
+```
+```{r}
+drug_order <- source_target_ti_df %>%
+  group_by(drug_key) %>%
+  summarise(median_target_TI = median(target_TI, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(median_target_TI)) %>%
+  summarise(drug_key = list(drug_key), .groups = "drop")
+
+drug_levels <- drug_order$drug_key[[1]]
+ggplot(source_target_ti_df %>%
+    mutate(drug_key = factor(drug_key, levels = drug_levels)), aes(x = source_TI, y = target_TI)) +
+  geom_abline(slope = 1, intercept = 0, color = "grey70", linewidth = 0.5, linetype = "dashed") +
+  geom_point(aes(fill = drug_key), shape = 21, color = "grey20", alpha = 0.75, size = 2.2) +
+  # scale_fill_brewer(palette = "Set2") +
+  labs(
+    x = "Source TI (NCI-H23)",
+    y = "Target TI",
+    fill = "Drug"
+  ) +
+  theme_bw(base_size = 16) +
+  theme(
+    panel.grid.minor = element_blank(),
+    legend.position = "right"
+  )
+```
+
+```{r}
+if (do_save_tahoe) {
+  tahoe_moa_ti_df <- tahoe_moa_delta_df %>%
+    mutate(target_key = normalize_drug_name(target)) %>%
+    left_join(tahoe_source_ti, by = "drug_key") %>%
+    left_join(tahoe_target_ti, by = c("target_key", "drug_key")) %>%
+    mutate(delta_TI = target_TI - source_TI)
+
+  tahoe_moa_ti_summary_df <- tahoe_moa_ti_df %>%
+    filter(
+      is.finite(delta_NES),
+      is.finite(source_TI),
+      is.finite(target_TI),
+      is.finite(delta_TI)
+    ) %>%
+    group_by(regime, moa_broad_group, `moa-fine`, moa_fine_label) %>%
+    summarise(
+      median_delta_NES = median(delta_NES, na.rm = TRUE),
+      median_source_TI = median(source_TI, na.rm = TRUE),
+      median_target_TI = median(target_TI, na.rm = TRUE),
+      median_delta_TI = median(delta_TI, na.rm = TRUE),
+      n_drugs = n_distinct(gene),
+      .groups = "drop"
+    )
+
+  saveRDS(
+    tahoe_moa_ti_summary_df,
+    file.path(RESULTS_PATH, "tahoe/tahoe_moa_ti_quadrant_summary_df.rds")
+  )
+} else {
+  tahoe_moa_ti_summary_df <- readRDS(file.path(RESULTS_PATH, "tahoe/tahoe_moa_ti_quadrant_summary_df.rds"))
+}
+
+plot_moa_ti_quadrant <- function(df, x_col, x_lab, title) {
+  moa_legend_order <- df %>%
+    filter(regime == "90th") %>%
+    arrange(desc(median_delta_NES)) %>%
+    pull(`moa-fine`)
+  moa_legend_order <- c(moa_legend_order, setdiff(unique(df$`moa-fine`), moa_legend_order))
+  
+  plot_df <- df %>%
+    mutate(`moa-fine` = factor(`moa-fine`, levels = moa_legend_order))
+  
+  size_breaks <- function(lims) {
+    candidates <- c(1, 2, 3, 5, 7, 10, 15, 20, 30, 50)
+    candidates[candidates >= ceiling(lims[1]) & candidates <= floor(lims[2])]
+  }
+  fit_stats <- df %>%
+    filter(is.finite(.data[[x_col]]), is.finite(median_delta_NES)) %>%
+    group_by(regime) %>%
+    group_modify(function(dat, key) {
+      dat <- dat %>% mutate(.x_value = .data[[x_col]])
+      if (nrow(dat) < 3 || n_distinct(dat$.x_value) < 2 || n_distinct(dat$median_delta_NES) < 2) {
+        return(tibble(label = "R2 = NA\np = NA"))
+      }
+      fit <- lm(median_delta_NES ~ .x_value, data = dat)
+      fit_summary <- summary(fit)
+      tibble(
+        label = sprintf(
+          "R2 = %.2f\np = %.2g",
+          fit_summary$r.squared,
+          coef(fit_summary)[".x_value", "Pr(>|t|)"]
+        )
+      )
+    }) %>%
+    ungroup()
+  
+  ggplot(plot_df, aes(x = .data[[x_col]], y = median_delta_NES)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey55", linewidth = 0.45) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey55", linewidth = 0.45) +
+    geom_hline(yintercept = 0, color = "grey80", linewidth = 0.35) +
+    geom_smooth(method = "lm", se = FALSE, color = "black", linewidth = 0.55) +
+    geom_point(aes(size = n_drugs, fill = `moa-fine`), shape = 21, color = "grey20", alpha = 0.82) +
+    geom_text(
+      data = fit_stats,
+      aes(x = Inf, y = Inf, label = label),
+      inherit.aes = FALSE,
+      hjust = 1.08,
+      vjust = 1.2,
+      size = 4.2
+    ) +
+    facet_grid(. ~ regime) +
+    scale_size(range = c(2, 8), breaks = size_breaks) +
+    labs(
+      title = title,
+      x = x_lab,
+      y = "Median delta NES",
+      fill = "MOA",
+      size = "N drugs"
+    ) +
+    theme_bw(base_size = 16) +
+    theme(
+      panel.grid.minor = element_blank(),
+      legend.position = "right",
+      strip.text = element_text(size = 16)
+    )
+}
+
+source_ti_quadrant <- plot_moa_ti_quadrant(
+  tahoe_moa_ti_summary_df,
+  "median_source_TI",
+  "Median source TI",
+  "MOA-level source TI vs delta NES"
+)
+
+target_ti_quadrant <- plot_moa_ti_quadrant(
+  tahoe_moa_ti_summary_df,
+  "median_target_TI",
+  "Median target TI",
+  "MOA-level target TI vs delta NES"
+)
+
+delta_ti_quadrant <- plot_moa_ti_quadrant(
+  tahoe_moa_ti_summary_df,
+  "median_delta_TI",
+  "Median delta TI",
+  "MOA-level delta TI vs delta NES"
+)
+```
+
+```{r, fig.width=14, fig.height=6}
+source_ti_quadrant
+```
+
+```{r}
+ggsave(
+  file.path(PROJECT_PATH, "results/plots/tahoe_moa_source_TI_delta_NES_quadrant.png"),
+  source_ti_quadrant,
+  width = 14,
+  height = 6,
+  dpi = 400
+)
+```
+
+```{r, fig.width=14, fig.height=6}
+target_ti_quadrant
+```
+
+```{r}
+ggsave(
+  file.path(PROJECT_PATH, "results/plots/tahoe_moa_target_TI_delta_NES_quadrant.png"),
+  target_ti_quadrant,
+  width = 14,
+  height = 6,
+  dpi = 400
+)
+```
+
+```{r, fig.width=14, fig.height=6}
+delta_ti_quadrant
+```
+
+```{r}
+ggsave(
+  file.path(PROJECT_PATH, "results/plots/tahoe_moa_delta_TI_delta_NES_quadrant.png"),
+  delta_ti_quadrant,
+  width = 14,
+  height = 6,
   dpi = 400
 )
 ```
