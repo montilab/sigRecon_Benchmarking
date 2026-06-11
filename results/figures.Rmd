@@ -589,8 +589,7 @@ ggplot(summary_df,
 
   geom_point(alpha = 0.9) +
 
-  facet_wrap(~metric) +
-  coord_cartesian(xlim = c(-0.02, 0.125)) +
+  facet_wrap(~metric, scales = "free_x") +
   scale_color_viridis_c(
     name = "-log10(meta p)",
     option = "A"
@@ -741,7 +740,54 @@ ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_10th_unpaired.png"),
 )
 ```
 
-### Paired
+### Paired {.tabset}
+
+#### Swarm
+```{r}
+if (do_save_tahoe) {
+  swarm_df <- bind_rows(
+    tahoe_ctrl_mean_df %>%
+      transmute(drug = gene, method = "Mean",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    tahoe_ctrl_net_df %>%
+      transmute(drug = gene, method = "NetworkProp",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    tahoe_ctrl_proj_e_df %>%
+      transmute(drug = gene, method = "ProjectCor (Eigen)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    tahoe_ctrl_proj_g_df %>%
+      transmute(drug = gene, method = "ProjectCor (GSVA)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE)
+  )
+  swarm_long <- swarm_df %>%
+    rename(`Jaccard ∆` = jacc_delta, `NES ∆` = NES_delta) %>%
+    pivot_longer(c(`Jaccard ∆`, `NES ∆`), names_to = "metric", values_to = "value")
+  saveRDS(swarm_long, file.path(RESULTS_PATH, "tahoe/ctrl_10th_paired_swarm_plot_df.rds"))
+} else {
+  swarm_long <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_10th_paired_swarm_plot_df.rds"))
+}
+```
+```{r}
+ggplot(swarm_long, aes(method, value, fill = method)) +
+  geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+  ggbeeswarm::geom_quasirandom(width = 0.15, alpha = 0.15, size = 0.05, groupOnX = TRUE) +
+  stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.8) +
+  facet_wrap(~metric, scales = "free_y") +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)")) +
+  labs(x = "", y = "Score") +
+  theme_classic(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "none",
+        strip.text = element_text(face = "bold"))
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_10th_paired_swarm.png"),
+  width = 8, height = 5, dpi = 400)
+```
+
+#### Dot Plot
 ```{r}
 ggplot(summary_df,
        aes(x = -log10(fisher_p),
@@ -751,8 +797,7 @@ ggplot(summary_df,
 
   geom_point(alpha = 0.9) +
 
-  facet_wrap(~metric) +
-  coord_cartesian(xlim = c(-0.6, 4.5)) +
+  facet_wrap(~metric, scales = "free_x") +
   scale_color_viridis_c(
     name = "-log10(meta p)",
     option = "A"
@@ -903,7 +948,54 @@ ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_90th_unpaired.png"),
 )
 ```
 
-### Paired
+### Paired {.tabset}
+
+#### Swarm
+```{r}
+if (do_save_tahoe) {
+  swarm_df <- bind_rows(
+    tahoe_ctrl_mean_df %>%
+      transmute(drug = gene, method = "Mean",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    tahoe_ctrl_net_df %>%
+      transmute(drug = gene, method = "NetworkProp",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    tahoe_ctrl_proj_e_df %>%
+      transmute(drug = gene, method = "ProjectCor (Eigen)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    tahoe_ctrl_proj_g_df %>%
+      transmute(drug = gene, method = "ProjectCor (GSVA)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE)
+  )
+  swarm_long <- swarm_df %>%
+    rename(`Jaccard ∆` = jacc_delta, `NES ∆` = NES_delta) %>%
+    pivot_longer(c(`Jaccard ∆`, `NES ∆`), names_to = "metric", values_to = "value")
+  saveRDS(swarm_long, file.path(RESULTS_PATH, "tahoe/ctrl_90th_paired_swarm_plot_df.rds"))
+} else {
+  swarm_long <- readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_90th_paired_swarm_plot_df.rds"))
+}
+```
+```{r}
+ggplot(swarm_long, aes(method, value, fill = method)) +
+  geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+  ggbeeswarm::geom_quasirandom(width = 0.15, alpha = 0.15, size = 0.05, groupOnX = TRUE) +
+  stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.8) +
+  facet_wrap(~metric, scales = "free_y") +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)")) +
+  labs(x = "", y = "Score") +
+  theme_classic(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "none",
+        strip.text = element_text(face = "bold"))
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_90th_paired_swarm.png"),
+  width = 8, height = 5, dpi = 400)
+```
+
+#### Dot Plot
 ```{r}
 ggplot(summary_df,
        aes(x = -log10(fisher_p),
@@ -913,8 +1005,7 @@ ggplot(summary_df,
 
   geom_point(alpha = 0.9) +
 
-  facet_wrap(~metric) +
-  coord_cartesian(xlim = c(-0.2, 7.5)) +
+  facet_wrap(~metric, scales = "free_x") +
   scale_color_viridis_c(
     name = "-log10(meta p)",
     option = "A"
@@ -938,7 +1029,6 @@ ggplot(summary_df,
     strip.text = element_text(face = "bold")
   )
 ```
-
 
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/tahoe_90th_paired.png"),
@@ -1168,8 +1258,7 @@ ggplot(summary_df,
 
   geom_point(alpha = 0.9) +
 
-  facet_wrap(~metric) +
-  coord_cartesian(xlim = c(-0.02, 0.125)) +
+  facet_wrap(~metric, scales = "free_x") +
   scale_color_viridis_c(
     name = "-log10(meta p)",
     option = "A"
@@ -1320,7 +1409,54 @@ ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_10th_unpaired.png"),
 )
 ```
 
-### Paired
+### Paired {.tabset}
+
+#### Swarm
+```{r}
+if (do_save_drugmatrix) {
+  swarm_df <- bind_rows(
+    drugmatrix_ctrl_mean_df %>%
+      transmute(drug = gene, method = "Mean",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    drugmatrix_ctrl_net_df %>%
+      transmute(drug = gene, method = "NetworkProp",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    drugmatrix_ctrl_proj_e_df %>%
+      transmute(drug = gene, method = "ProjectCor (Eigen)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    drugmatrix_ctrl_proj_g_df %>%
+      transmute(drug = gene, method = "ProjectCor (GSVA)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE)
+  )
+  swarm_long <- swarm_df %>%
+    rename(`Jaccard ∆` = jacc_delta, `NES ∆` = NES_delta) %>%
+    pivot_longer(c(`Jaccard ∆`, `NES ∆`), names_to = "metric", values_to = "value")
+  saveRDS(swarm_long, file.path(RESULTS_PATH, "drugmatrix/ctrl_10th_paired_swarm_plot_df.rds"))
+} else {
+  swarm_long <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_10th_paired_swarm_plot_df.rds"))
+}
+```
+```{r}
+ggplot(swarm_long, aes(method, value, fill = method)) +
+  geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+  ggbeeswarm::geom_beeswarm(size = 0.1, alpha = 0.7, cex = 0.7) +
+  stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.8) +
+  facet_wrap(~metric, scales = "free_y") +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)")) +
+  labs(x = "", y = "Score") +
+  theme_classic(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "none",
+        strip.text = element_text(face = "bold"))
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_10th_paired_swarm.png"),
+  width = 8, height = 5, dpi = 400)
+```
+
+#### Dot Plot
 ```{r}
 ggplot(summary_df,
        aes(x = -log10(fisher_p),
@@ -1330,8 +1466,7 @@ ggplot(summary_df,
 
   geom_point(alpha = 0.9) +
 
-  facet_wrap(~metric) +
-  coord_cartesian(xlim = c(-0.6, 4.5)) +
+  facet_wrap(~metric, scales = "free_x") +
   scale_color_viridis_c(
     name = "-log10(meta p)",
     option = "A"
@@ -1482,7 +1617,54 @@ ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_90th_unpaired.png"),
 )
 ```
 
-### Paired
+### Paired {.tabset}
+
+#### Swarm
+```{r}
+if (do_save_drugmatrix) {
+  swarm_df <- bind_rows(
+    drugmatrix_ctrl_mean_df %>%
+      transmute(drug = gene, method = "Mean",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    drugmatrix_ctrl_net_df %>%
+      transmute(drug = gene, method = "NetworkProp",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    drugmatrix_ctrl_proj_e_df %>%
+      transmute(drug = gene, method = "ProjectCor (Eigen)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    drugmatrix_ctrl_proj_g_df %>%
+      transmute(drug = gene, method = "ProjectCor (GSVA)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE)
+  )
+  swarm_long <- swarm_df %>%
+    rename(`Jaccard ∆` = jacc_delta, `NES ∆` = NES_delta) %>%
+    pivot_longer(c(`Jaccard ∆`, `NES ∆`), names_to = "metric", values_to = "value")
+  saveRDS(swarm_long, file.path(RESULTS_PATH, "drugmatrix/ctrl_90th_paired_swarm_plot_df.rds"))
+} else {
+  swarm_long <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_90th_paired_swarm_plot_df.rds"))
+}
+```
+```{r}
+ggplot(swarm_long, aes(method, value, fill = method)) +
+  geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+  ggbeeswarm::geom_beeswarm(size = 0.1, alpha = 0.7, cex = 0.7) +
+  stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.8) +
+  facet_wrap(~metric, scales = "free_y") +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)")) +
+  labs(x = "", y = "Score") +
+  theme_classic(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "none",
+        strip.text = element_text(face = "bold"))
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_90th_paired_swarm.png"),
+  width = 8, height = 5, dpi = 400)
+```
+
+#### Dot Plot
 ```{r}
 ggplot(summary_df,
        aes(x = -log10(fisher_p),
@@ -1492,8 +1674,7 @@ ggplot(summary_df,
 
   geom_point(alpha = 0.9) +
 
-  facet_wrap(~metric) +
-  coord_cartesian(xlim = c(-0.2, 7.5)) +
+  facet_wrap(~metric, scales = "free_x") +
   scale_color_viridis_c(
     name = "-log10(meta p)",
     option = "A"
@@ -1517,7 +1698,6 @@ ggplot(summary_df,
     strip.text = element_text(face = "bold")
   )
 ```
-
 
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_90th_paired.png"),
@@ -1662,7 +1842,7 @@ ggsave(file.path(PROJECT_PATH, "results/plots/perturbseq_ctrl_paired_swarm.png")
 ggplot(summary_df,
        aes(x = -log10(fisher_p), y = method, size = prop, color = -log10(fisher_p))) +
   geom_point(alpha = 0.9) +
-  facet_wrap(~metric) +
+  facet_wrap(~metric, scales = "free_x") +
   scale_color_viridis_c(name = "-log10(meta p)", option = "A") +
   scale_size(range = c(3, 10), name = "Fraction improved") +
   labs(x = "-log10 Fisher meta‑p", y = "") +
@@ -1760,13 +1940,66 @@ ggsave(file.path(PROJECT_PATH, "results/plots/perturbseq_10th_unpaired.png"),
        width = 8, height = 5, dpi = 400)
 ```
 
-### Paired
+### Paired {.tabset}
+
+#### Swarm
+```{r}
+if (do_save_perturbseq) {
+  swarm_df <- bind_rows(
+    perturbseq_10th_mean_df %>%
+      transmute(drug = gene, method = "Mean",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    perturbseq_10th_net_df %>%
+      transmute(drug = gene, method = "NetworkProp",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    perturbseq_10th_proj_e_df %>%
+      transmute(drug = gene, method = "ProjectCor (Eigen)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    perturbseq_10th_proj_g_df %>%
+      transmute(drug = gene, method = "ProjectCor (GSVA)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    perturbseq_10th_scgpt_df %>%
+      transmute(drug = gene, method = "scGPT",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    perturbseq_10th_stack_df %>%
+      transmute(drug = gene, method = "Stack",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE)
+  )
+  swarm_long <- swarm_df %>%
+    rename(`Jaccard ∆` = jacc_delta, `NES ∆` = NES_delta) %>%
+    pivot_longer(c(`Jaccard ∆`, `NES ∆`), names_to = "metric", values_to = "value")
+  saveRDS(swarm_long, file.path(RESULTS_PATH, "perturb-seq/ctrl_10th_paired_swarm_plot_df.rds"))
+} else {
+  swarm_long <- readRDS(file.path(RESULTS_PATH, "perturb-seq/ctrl_10th_paired_swarm_plot_df.rds"))
+}
+```
+```{r}
+ggplot(swarm_long, aes(method, value, fill = method)) +
+  geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+  ggbeeswarm::geom_quasirandom(size = 0.05, alpha = 0.2, cex = 0.7) +
+  stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.8) +
+  facet_wrap(~metric, scales = "free_y") +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("Mean", "NetworkProp",
+                               "ProjectCor (Eigen)", "ProjectCor (GSVA)", "scGPT", "Stack")) +
+  labs(x = "", y = "Score") +
+  theme_classic(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "none",
+        strip.text = element_text(face = "bold"))
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/perturbseq_10th_paired_swarm.png"),
+       width = 8, height = 5, dpi = 400)
+```
+
+#### Dot Plot
 ```{r}
 ggplot(summary_df,
        aes(x = -log10(fisher_p), y = method, size = prop, color = -log10(fisher_p))) +
   geom_point(alpha = 0.9) +
-  facet_wrap(~metric) +
-  coord_cartesian(xlim = c(-0.6, 6)) +
+  facet_wrap(~metric, scales = "free_x") +
   scale_color_viridis_c(name = "-log10(meta p)", option = "A") +
   scale_size(range = c(3, 10), name = "Fraction Improved") +
   labs(x = "-log10 Fisher meta‑p", y = "") +
@@ -1864,13 +2097,66 @@ ggsave(file.path(PROJECT_PATH, "results/plots/perturbseq_90th_unpaired.png"),
        width = 8, height = 5, dpi = 400)
 ```
 
-### Paired
+### Paired {.tabset}
+
+#### Swarm
+```{r}
+if (do_save_perturbseq) {
+  swarm_df <- bind_rows(
+    perturbseq_90th_mean_df %>%
+      transmute(drug = gene, method = "Mean",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    perturbseq_90th_net_df %>%
+      transmute(drug = gene, method = "NetworkProp",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    perturbseq_90th_proj_e_df %>%
+      transmute(drug = gene, method = "ProjectCor (Eigen)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    perturbseq_90th_proj_g_df %>%
+      transmute(drug = gene, method = "ProjectCor (GSVA)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    perturbseq_90th_scgpt_df %>%
+      transmute(drug = gene, method = "scGPT",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    perturbseq_90th_stack_df %>%
+      transmute(drug = gene, method = "Stack",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE)
+  )
+  swarm_long <- swarm_df %>%
+    rename(`Jaccard ∆` = jacc_delta, `NES ∆` = NES_delta) %>%
+    pivot_longer(c(`Jaccard ∆`, `NES ∆`), names_to = "metric", values_to = "value")
+  saveRDS(swarm_long, file.path(RESULTS_PATH, "perturb-seq/ctrl_90th_paired_swarm_plot_df.rds"))
+} else {
+  swarm_long <- readRDS(file.path(RESULTS_PATH, "perturb-seq/ctrl_90th_paired_swarm_plot_df.rds"))
+}
+```
+```{r}
+ggplot(swarm_long, aes(method, value, fill = method)) +
+  geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+  ggbeeswarm::geom_quasirandom(size = 0.05, alpha = 0.2, cex = 0.7) +
+  stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.8) +
+  facet_wrap(~metric, scales = "free_y") +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("Mean", "NetworkProp",
+                               "ProjectCor (Eigen)", "ProjectCor (GSVA)", "scGPT", "Stack")) +
+  labs(x = "", y = "Score") +
+  theme_classic(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "none",
+        strip.text = element_text(face = "bold"))
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/perturbseq_90th_paired_swarm.png"),
+       width = 8, height = 5, dpi = 400)
+```
+
+#### Dot Plot
 ```{r}
 ggplot(summary_df,
        aes(x = -log10(fisher_p), y = method, size = prop, color = -log10(fisher_p))) +
   geom_point(alpha = 0.9) +
-  facet_wrap(~metric) +
-  coord_cartesian(xlim = c(-0.2, 7.5)) +
+  facet_wrap(~metric, scales = "free_x") +
   scale_color_viridis_c(name = "-log10(meta p)", option = "A") +
   scale_size(range = c(3, 10), name = "Fraction Improved") +
   labs(x = "-log10 Fisher meta‑p", y = "") +
@@ -2026,7 +2312,7 @@ ggsave(file.path(PROJECT_PATH, "results/plots/sciplex_ctrl_paired_swarm.png"),
 ggplot(summary_df,
        aes(x = -log10(fisher_p), y = method, size = prop, color = -log10(fisher_p))) +
   geom_point(alpha = 0.9) +
-  facet_wrap(~metric) +
+  facet_wrap(~metric, scales = "free_x") +
   scale_color_viridis_c(name = "-log10(meta p)", option = "A") +
   scale_size(range = c(3, 10), name = "Fraction improved") +
   labs(x = "-log10 Fisher meta‑p", y = "") +
@@ -2120,13 +2406,63 @@ ggsave(file.path(PROJECT_PATH, "results/plots/sciplex_10th_unpaired.png"),
        width = 8, height = 5, dpi = 400)
 ```
 
-### Paired
+### Paired {.tabset}
+
+#### Swarm
+```{r}
+if (do_save_sciplex) {
+  swarm_df <- bind_rows(
+    sciplex_10th_mean_df %>%
+      transmute(drug = gene, method = "Mean",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    sciplex_10th_net_df %>%
+      transmute(drug = gene, method = "NetworkProp",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    sciplex_10th_proj_e_df %>%
+      transmute(drug = gene, method = "ProjectCor (Eigen)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    sciplex_10th_proj_g_df %>%
+      transmute(drug = gene, method = "ProjectCor (GSVA)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    sciplex_10th_stack_df %>%
+      transmute(drug = gene, method = "Stack",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE)
+  )
+  swarm_long <- swarm_df %>%
+    rename(`Jaccard ∆` = jacc_delta, `NES ∆` = NES_delta) %>%
+    pivot_longer(c(`Jaccard ∆`, `NES ∆`), names_to = "metric", values_to = "value")
+  saveRDS(swarm_long, file.path(RESULTS_PATH, "sciplex/ctrl_10th_paired_swarm_plot_df.rds"))
+} else {
+  swarm_long <- readRDS(file.path(RESULTS_PATH, "sciplex/ctrl_10th_paired_swarm_plot_df.rds"))
+}
+```
+```{r}
+ggplot(swarm_long, aes(method, value, fill = method)) +
+  geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+  ggbeeswarm::geom_beeswarm(size = 0.1, alpha = 0.7, cex = 0.7) +
+  stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.8) +
+  facet_wrap(~metric, scales = "free_y") +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("Mean", "NetworkProp",
+                               "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Stack")) +
+  labs(x = "", y = "Score") +
+  theme_classic(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "none",
+        strip.text = element_text(face = "bold"))
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/sciplex_10th_paired_swarm.png"),
+       width = 8, height = 5, dpi = 400)
+```
+
+#### Dot Plot
 ```{r}
 ggplot(summary_df,
        aes(x = -log10(fisher_p), y = method, size = prop, color = -log10(fisher_p))) +
   geom_point(alpha = 0.9) +
-  facet_wrap(~metric) +
-  coord_cartesian(xlim = c(-0.6, 4.5)) +
+  facet_wrap(~metric, scales = "free_x") +
   scale_color_viridis_c(name = "-log10(meta p)", option = "A") +
   scale_size(range = c(3, 10), name = "Fraction Improved") +
   labs(x = "-log10 Fisher meta‑p", y = "") +
@@ -2220,13 +2556,63 @@ ggsave(file.path(PROJECT_PATH, "results/plots/sciplex_90th_unpaired.png"),
        width = 8, height = 5, dpi = 400)
 ```
 
-### Paired
+### Paired {.tabset}
+
+#### Swarm
+```{r}
+if (do_save_sciplex) {
+  swarm_df <- bind_rows(
+    sciplex_90th_mean_df %>%
+      transmute(drug = gene, method = "Mean",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    sciplex_90th_net_df %>%
+      transmute(drug = gene, method = "NetworkProp",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    sciplex_90th_proj_e_df %>%
+      transmute(drug = gene, method = "ProjectCor (Eigen)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    sciplex_90th_proj_g_df %>%
+      transmute(drug = gene, method = "ProjectCor (GSVA)",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+    sciplex_90th_stack_df %>%
+      transmute(drug = gene, method = "Stack",
+                jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE)
+  )
+  swarm_long <- swarm_df %>%
+    rename(`Jaccard ∆` = jacc_delta, `NES ∆` = NES_delta) %>%
+    pivot_longer(c(`Jaccard ∆`, `NES ∆`), names_to = "metric", values_to = "value")
+  saveRDS(swarm_long, file.path(RESULTS_PATH, "sciplex/ctrl_90th_paired_swarm_plot_df.rds"))
+} else {
+  swarm_long <- readRDS(file.path(RESULTS_PATH, "sciplex/ctrl_90th_paired_swarm_plot_df.rds"))
+}
+```
+```{r}
+ggplot(swarm_long, aes(method, value, fill = method)) +
+  geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+  ggbeeswarm::geom_beeswarm(size = 0.1, alpha = 0.7, cex = 0.7) +
+  stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.8) +
+  facet_wrap(~metric, scales = "free_y") +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_x_discrete(limits = c("Mean", "NetworkProp",
+                               "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Stack")) +
+  labs(x = "", y = "Score") +
+  theme_classic(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "none",
+        strip.text = element_text(face = "bold"))
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/sciplex_90th_paired_swarm.png"),
+       width = 8, height = 5, dpi = 400)
+```
+
+#### Dot Plot
 ```{r}
 ggplot(summary_df,
        aes(x = -log10(fisher_p), y = method, size = prop, color = -log10(fisher_p))) +
   geom_point(alpha = 0.9) +
-  facet_wrap(~metric) +
-  coord_cartesian(xlim = c(-0.2, 7.5)) +
+  facet_wrap(~metric, scales = "free_x") +
   scale_color_viridis_c(name = "-log10(meta p)", option = "A") +
   scale_size(range = c(3, 10), name = "Fraction Improved") +
   labs(x = "-log10 Fisher meta‑p", y = "") +
