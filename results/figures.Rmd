@@ -106,6 +106,8 @@ ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_ecdf.png"),
        width = 8, height = 5, dpi = 400)
 ```
 
+> The y-axis is on a log scale so that rare, high-TI perturbations — which would be invisible on a linear scale — are shown with equal visual weight as common, low-TI perturbations. This makes it possible to compare how the tails of the distributions differ across datasets.
+
 ```{r}
 # Complementary CDF (survival function: 1 - ECDF) — log-log axes.
 # Reads as "fraction of perturbations with TI > x". Log-log reveals
@@ -119,7 +121,7 @@ ti_ccdf_df <- ti_df %>%
 ggplot(ti_ccdf_df %>% filter(TI > 0),
        aes(x = TI, y = ccdf, color = dataset)) +
   geom_line(linewidth = 0.9) +
-  scale_x_log10(name = "TI") +
+  # scale_x_log10(name = "TI") +
   scale_y_log10(name = "Fraction with TI > x", labels = scales::percent) +
   scale_color_brewer(palette = "Set1", name = "Dataset") +
   theme_classic(base_size = 15) +
