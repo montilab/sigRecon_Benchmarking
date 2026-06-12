@@ -67,105 +67,6 @@ summarize_method <- function(df, method_name){
 }
 ```
 
-# TI Distributions
-
-```{r ti-distributions, message=FALSE, warning=FALSE}
-ti_path <- file.path(PROJECT_PATH, "results/plots/trade_metric_correlations")
-
-ti_df <- bind_rows(
-  readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds")) %>%
-    transmute(dataset = "DrugMatrix", TI),
-  readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>%
-    transmute(dataset = "Perturb-seq", TI),
-  readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds")) %>%
-    transmute(dataset = "SciPlex", TI),
-  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds")) %>%
-    transmute(dataset = "Tahoe", TI)
-) %>%
-  filter(is.finite(TI)) %>%
-  mutate(dataset = factor(dataset, levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")))
-```
-
-```{r}
-# ECDF — one line per dataset, log1p x-axis.
-# The discrete jump at x=0 directly shows the zero-inflation fraction.
-ggplot(ti_df, aes(x = log1p(TI), color = dataset)) +
-  stat_ecdf(linewidth = 0.9) +
-  scale_x_continuous(
-    name   = "TI",
-    breaks = log1p(c(0, 0.1, 0.25, 0.5, 1, 2, 3)),
-    labels = c("0", "0.1", "0.25", "0.5", "1", "2", "3")
-  ) +
-  scale_y_continuous(name = "Cumulative fraction", labels = scales::percent) +
-  scale_color_brewer(palette = "Set1", name = "Dataset") +
-  theme_classic(base_size = 15) +
-  theme(legend.position = "right")
-```
-```{r}
-ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_ecdf.png"),
-       width = 8, height = 5, dpi = 400)
-```
-
-> The y-axis is on a log scale so that rare, high-TI perturbations — which would be invisible on a linear scale — are shown with equal visual weight as common, low-TI perturbations. This makes it possible to compare how the tails of the distributions differ across datasets.
-
-```{r}
-# Complementary CDF (survival function: 1 - ECDF) — log-log axes.
-# Reads as "fraction of perturbations with TI > x". Log-log reveals
-# tail heaviness and potential power-law structure across datasets.
-ti_ccdf_df <- ti_df %>%
-  group_by(dataset) %>%
-  arrange(TI, .by_group = TRUE) %>%
-  mutate(ccdf = 1 - (seq_len(n()) / n())) %>%
-  ungroup()
-
-ggplot(ti_ccdf_df %>% filter(TI > 0),
-       aes(x = TI, y = ccdf, color = dataset)) +
-  geom_line(linewidth = 0.9) +
-  # scale_x_log10(name = "TI") +
-  scale_y_log10(name = "Fraction with TI > x", labels = scales::percent) +
-  scale_color_brewer(palette = "Set1", name = "Dataset") +
-  theme_classic(base_size = 15) +
-  theme(legend.position = "right")
-```
-```{r}
-ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_ccdf.png"),
-       width = 8, height = 5, dpi = 400)
-```
-
-```{r}
-# Proportional bar chart by TI category.
-# Bins: zero, low (0, 0.1], medium (0.1, 0.5], high (> 0.5)
-ti_cat_df <- ti_df %>%
-  mutate(ti_cat = case_when(
-    TI == 0            ~ "Zero",
-    TI <= 0.1          ~ "Low (0–0.1]",
-    TI <= 0.5          ~ "Medium (0.1–0.5]",
-    TRUE               ~ "High (> 0.5)"
-  )) %>%
-  mutate(ti_cat = factor(ti_cat,
-                         levels = c("Zero", "Low (0–0.1]",
-                                    "Medium (0.1–0.5]", "High (> 0.5)")))
-
-ti_cat_summary <- ti_cat_df %>%
-  count(dataset, ti_cat) %>%
-  group_by(dataset) %>%
-  mutate(prop = n / sum(n)) %>%
-  ungroup()
-
-ggplot(ti_cat_summary, aes(x = dataset, y = prop, fill = ti_cat)) +
-  geom_col(width = 0.7) +
-  scale_y_continuous(name = "Fraction of perturbations", labels = scales::percent) +
-  scale_fill_brewer(palette = "Pastel1", name = "TI category") +
-  labs(x = "") +
-  theme_classic(base_size = 15) +
-  theme(axis.text.x = element_text(angle = 35, hjust = 1),
-        legend.position = "right")
-```
-```{r}
-ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_categories.png"),
-       width = 7, height = 5, dpi = 400)
-```
-
 # Unpaired results {.tabset}
 
 ```{r unpaired-results, message=FALSE, warning=FALSE}
@@ -3470,4 +3371,194 @@ ggsave(
   height = 6,
   dpi = 400
 )
+```
+
+# TI Distributions
+
+```{r ti-distributions, message=FALSE, warning=FALSE}
+ti_path <- file.path(PROJECT_PATH, "results/plots/trade_metric_correlations")
+
+ti_df <- bind_rows(
+  readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds")) %>%
+    transmute(dataset = "DrugMatrix", TI),
+  readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>%
+    transmute(dataset = "Perturb-seq", TI),
+  readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds")) %>%
+    transmute(dataset = "SciPlex", TI),
+  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds")) %>%
+    transmute(dataset = "Tahoe", TI)
+) %>%
+  filter(is.finite(TI)) %>%
+  mutate(dataset = factor(dataset, levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")))
+```
+
+```{r}
+# ECDF — shaded area + step line per dataset, log1p x-axis.
+# stat_ecdf called twice: once as "area" for fill, once as "step" for the line.
+# The jump at x=0 shows the zero-inflation fraction for each dataset.
+ggplot(ti_df, aes(x = log1p(TI), color = dataset, fill = dataset)) +
+  stat_ecdf(geom = "area", alpha = 0.35, linewidth = 0) +
+  stat_ecdf(linewidth = 0.9) +
+  scale_x_continuous(
+    name   = "TI",
+    breaks = log1p(c(0, 0.1, 0.25, 0.5, 1, 2, 3)),
+    labels = c("0", "0.1", "0.25", "0.5", "1", "2", "3")
+  ) +
+  scale_y_continuous(name = "Cumulative fraction", labels = scales::percent) +
+  scale_color_brewer(palette = "Pastel1", name = "Dataset") +
+  scale_fill_brewer(palette = "Pastel1", name = "Dataset") +
+  theme_classic(base_size = 15) +
+  theme(legend.position = "right")
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_ecdf.png"),
+       width = 8, height = 5, dpi = 400)
+```
+
+```{r}
+# Complementary CDF — shaded ribbon below curve, log-log axes.
+# Reads as "fraction of perturbations with TI > x".
+# Log-log reveals tail heaviness; a straight line indicates a power-law tail.
+# ymin = 1e-4 anchors the ribbon to the bottom of the log y-axis.
+ti_ccdf_df <- ti_df %>%
+  group_by(dataset) %>%
+  arrange(TI, .by_group = TRUE) %>%
+  mutate(ccdf = 1 - (seq_len(n()) / n())) %>%
+  ungroup()
+
+ggplot(ti_ccdf_df %>% filter(TI > 0),
+       aes(x = TI, color = dataset, fill = dataset)) +
+  geom_ribbon(aes(ymin = 1e-4, ymax = ccdf), alpha = 0.35, color = NA) +
+  geom_line(aes(y = ccdf), linewidth = 0.9) +
+  scale_x_log10(name = "TI") +
+  scale_y_log10(name = "Fraction with TI > x", labels = scales::percent) +
+  scale_color_brewer(palette = "Pastel1", name = "Dataset") +
+  scale_fill_brewer(palette = "Pastel1", name = "Dataset") +
+  theme_classic(base_size = 15) +
+  theme(legend.position = "right")
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_ccdf.png"),
+       width = 8, height = 5, dpi = 400)
+```
+
+```{r}
+# Proportional bar chart by TI category.
+# Bins: zero, low (0, 0.1], medium (0.1, 0.5], high (> 0.5)
+ti_cat_df <- ti_df %>%
+  mutate(ti_cat = case_when(
+    TI == 0   ~ "Zero",
+    TI <= 0.1 ~ "Low (0–0.1]",
+    TI <= 0.5 ~ "Medium (0.1–0.5]",
+    TRUE      ~ "High (> 0.5)"
+  )) %>%
+  mutate(ti_cat = factor(ti_cat,
+                         levels = c("Zero", "Low (0–0.1]",
+                                    "Medium (0.1–0.5]", "High (> 0.5)")))
+
+ti_cat_summary <- ti_cat_df %>%
+  count(dataset, ti_cat) %>%
+  group_by(dataset) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+ggplot(ti_cat_summary, aes(x = dataset, y = prop, fill = ti_cat)) +
+  geom_col(width = 0.7) +
+  scale_y_continuous(name = "Fraction of perturbations", labels = scales::percent) +
+  scale_fill_brewer(palette = "Pastel1", name = "TI category") +
+  labs(x = "") +
+  theme_classic(base_size = 15) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "right")
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_categories.png"),
+       width = 7, height = 5, dpi = 400)
+```
+
+## TI × Delta NES (90th regime, best method per dataset)
+
+```{r ti-delta-nes, message=FALSE, warning=FALSE}
+# Best method per dataset by median NES Wilcoxon W statistic in the 90th regime:
+#   DrugMatrix  → mean             (W = 643.5)
+#   Perturb-seq → network prop     (W = 554,545)
+#   SciPlex     → project cor gsva (W = 218)
+#   Tahoe       → network prop     (W = 177,611)
+
+ti_delta_eval <- bind_rows(
+  readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_90th_mean_eval_table.rds")) %>%
+    transmute(dataset = "DrugMatrix", source, gene,
+              delta_NES = NES_TRUE - NES_FALSE),
+  readRDS(file.path(RESULTS_PATH, "perturb-seq/ctrl_90th_networkprop_eval_table.rds")) %>%
+    transmute(dataset = "Perturb-seq", source, gene,
+              delta_NES = NES_TRUE - NES_FALSE),
+  readRDS(file.path(RESULTS_PATH, "sciplex/90th_projectcor_gsva_eval_table.rds")) %>%
+    transmute(dataset = "SciPlex", source, gene,
+              delta_NES = NES_TRUE - NES_FALSE),
+  readRDS(file.path(RESULTS_PATH, "tahoe/network_prop_90th_eval_table.rds")) %>%
+    transmute(dataset = "Tahoe", source, gene,
+              delta_NES = NES_TRUE - NES_FALSE)
+)
+
+# Source-context TI for all datasets
+ti_all <- bind_rows(
+  readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds")) %>%
+    transmute(dataset = "DrugMatrix", context_key, drug, TI),
+  readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>%
+    transmute(dataset = "Perturb-seq", context_key, drug, TI),
+  readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds")) %>%
+    transmute(dataset = "SciPlex", context_key, drug, TI),
+  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds")) %>%
+    transmute(dataset = "Tahoe", context_key, drug, TI)
+)
+
+# Normalize eval `source` to match TI `context_key`:
+#   Tahoe       "nci_h23"   → "ncih23"  (strip underscores)
+#   SciPlex     "a549_k562" → "a549"    (take component before first _)
+#   Perturb-seq "k562_rpe1" → "k562"   (take component before first _; network_prop uses source_target format)
+#   DrugMatrix  unchanged   (e.g. "kidney")
+ti_delta_joined <- ti_delta_eval %>%
+  mutate(
+    source_key = case_when(
+      dataset == "Tahoe"       ~ gsub("_", "", source),
+      dataset == "SciPlex"     ~ sub("_.*", "", source),
+      dataset == "Perturb-seq" ~ sub("_.*", "", source),
+      TRUE                     ~ source
+    )
+  ) %>%
+  left_join(ti_all,
+            by = c("dataset", "source_key" = "context_key", "gene" = "drug")) %>%
+  filter(!is.na(TI), !is.na(delta_NES)) %>%
+  mutate(
+    ti_cat = case_when(
+      TI == 0   ~ "Zero",
+      TI <= 0.1 ~ "Low (0–0.1]",
+      TI <= 0.5 ~ "Medium (0.1–0.5]",
+      TRUE      ~ "High (> 0.5)"
+    ),
+    ti_cat  = factor(ti_cat, levels = c("Zero", "Low (0–0.1]",
+                                         "Medium (0.1–0.5]", "High (> 0.5)")),
+    dataset = factor(dataset,
+                     levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe"))
+  )
+```
+
+```{r}
+ggplot(ti_delta_joined, aes(x = ti_cat, y = delta_NES, fill = ti_cat)) +
+  geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.3, linewidth = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40", linewidth = 0.7) +
+  facet_wrap(~dataset, scales = "free_y", ncol = 2) +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(x = "TI category", y = "Delta NES (predicted − source)") +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.x   = element_text(angle = 35, hjust = 1),
+    legend.position = "none",
+    strip.text    = element_text(face = "bold"),
+    panel.spacing = unit(1.5, "lines")
+  )
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/ti_delta_nes_by_category.png"),
+       width = 9, height = 7, dpi = 400)
 ```
