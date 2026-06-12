@@ -3432,7 +3432,10 @@ p_ccdf <- ggplot(ti_ccdf_df %>% filter(TI > 0),
   scale_y_log10(name = "Fraction with TI > x", labels = scales::percent) +
   scale_color_brewer(palette = "Paired", name = "Dataset") +
   theme_classic(base_size = 15) +
-  theme(legend.position = "right")
+  theme(legend.position          = c(0.98, 0.98),
+        legend.justification     = c("right", "top"),
+        legend.background        = element_rect(fill = alpha("white", 0.7), colour = NA),
+        legend.key.size          = unit(0.5, "lines"))
 p_ccdf
 ```
 ```{r}
