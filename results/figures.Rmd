@@ -3448,14 +3448,13 @@ ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_ccdf.png"),
 # Bins: zero, low (0, 0.1], medium (0.1, 0.5], high (> 0.5)
 ti_cat_df <- ti_df %>%
   mutate(ti_cat = case_when(
-    TI == 0   ~ "Zero",
-    TI <= 0.1 ~ "Low (0–0.1]",
-    TI <= 0.5 ~ "Medium (0.1–0.5]",
-    TRUE      ~ "High (> 0.5)"
+    TI <  0.1 ~ "Low [0–0.1)",
+    TI <  0.5 ~ "Medium [0.1–0.5)",
+    TRUE      ~ "High (≥0.5)"
   )) %>%
   mutate(ti_cat = factor(ti_cat,
-                         levels = c("Zero", "Low (0–0.1]",
-                                    "Medium (0.1–0.5]", "High (> 0.5)")))
+                         levels = c("Low [0–0.1)", "Medium [0.1–0.5)",
+                                    "High (≥0.5)")))
 
 ti_cat_summary <- ti_cat_df %>%
   count(dataset, ti_cat) %>%
@@ -3533,13 +3532,12 @@ ti_delta_joined <- ti_delta_eval %>%
   filter(!is.na(TI), !is.na(delta_NES)) %>%
   mutate(
     ti_cat = case_when(
-      TI == 0   ~ "Zero",
-      TI <= 0.1 ~ "Low (0–0.1]",
-      TI <= 0.5 ~ "Medium (0.1–0.5]",
-      TRUE      ~ "High (> 0.5)"
+      TI <  0.1 ~ "Low [0–0.1)",
+      TI <  0.5 ~ "Medium [0.1–0.5)",
+      TRUE      ~ "High (≥0.5)"
     ),
-    ti_cat  = factor(ti_cat, levels = c("Zero", "Low (0–0.1]",
-                                         "Medium (0.1–0.5]", "High (> 0.5)")),
+    ti_cat  = factor(ti_cat, levels = c("Low [0–0.1)", "Medium [0.1–0.5)",
+                                         "High (≥0.5)")),
     dataset = factor(dataset,
                      levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe"))
   )
@@ -3551,9 +3549,9 @@ ti_delta_joined <- ti_delta_eval %>%
 # bug where hide.ns = TRUE suppresses the label but still draws the bracket line.
 ti_comp_pairs <- tibble::tribble(
   ~higher,              ~lower,
-  "Medium (0.1–0.5]",  "Low (0–0.1]",
-  "High (> 0.5)",      "Medium (0.1–0.5]",
-  "High (> 0.5)",      "Low (0–0.1]"
+  "Medium [0.1–0.5)", "Low [0–0.1)",
+  "High (≥0.5)",      "Medium [0.1–0.5)",
+  "High (≥0.5)",      "Low [0–0.1)"
 )
 
 ti_signif_df <- purrr::map_dfr(
