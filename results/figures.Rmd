@@ -87,48 +87,57 @@ ti_df <- bind_rows(
 ```
 
 ```{r}
-# KDE computed on log1p(TI) so density is estimated on the transformed scale;
-# x-axis back-labelled with original TI values. Y-axis on log10 scale to
-# reveal tail structure obscured by the zero-heavy distributions.
-ggplot(ti_df, aes(x = log1p(TI), fill = dataset, color = dataset)) +
-  geom_density(alpha = 0.45, linewidth = 0.8) +
+# ECDF — one line per dataset, log1p x-axis.
+# The discrete jump at x=0 directly shows the zero-inflation fraction.
+ggplot(ti_df, aes(x = log1p(TI), color = dataset)) +
+  stat_ecdf(linewidth = 0.9) +
   scale_x_continuous(
-    name = "TI",
+    name   = "TI",
     breaks = log1p(c(0, 0.1, 0.25, 0.5, 1, 2, 3)),
     labels = c("0", "0.1", "0.25", "0.5", "1", "2", "3")
   ) +
-  scale_y_log10(name = "Density") +
-  scale_fill_brewer(palette = "Pastel1") +
-  scale_color_brewer(palette = "Pastel1") +
-  labs(fill = "Dataset", color = "Dataset") +
+  scale_y_continuous(name = "Cumulative fraction", labels = scales::percent) +
+  scale_color_brewer(palette = "Set1", name = "Dataset") +
   theme_classic(base_size = 15) +
-  theme(legend.position = "right",
-        strip.text = element_text(face = "bold"))
+  theme(legend.position = "right")
 ```
 ```{r}
-ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_density.png"),
+ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_ecdf.png"),
        width = 8, height = 5, dpi = 400)
 ```
 
 ```{r}
-# log1p y-axis: handles the zero mass while spreading the long upper tail
-ggplot(ti_df, aes(x = dataset, y = TI, fill = dataset)) +
-  geom_violin(alpha = 0.7, color = NA) +
-  stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
-  scale_y_continuous(
-    trans  = "log1p",
-    breaks = c(0, 0.1, 0.25, 0.5, 1, 2, 3),
-    name   = "TI"
-  ) +
-  scale_fill_brewer(palette = "Pastel1") +
+# Proportional bar chart by TI category.
+# Bins: zero, low (0, 0.1], medium (0.1, 0.5], high (> 0.5)
+ti_cat_df <- ti_df %>%
+  mutate(ti_cat = case_when(
+    TI == 0            ~ "Zero",
+    TI <= 0.1          ~ "Low (0–0.1]",
+    TI <= 0.5          ~ "Medium (0.1–0.5]",
+    TRUE               ~ "High (> 0.5)"
+  )) %>%
+  mutate(ti_cat = factor(ti_cat,
+                         levels = c("Zero", "Low (0–0.1]",
+                                    "Medium (0.1–0.5]", "High (> 0.5)")))
+
+ti_cat_summary <- ti_cat_df %>%
+  count(dataset, ti_cat) %>%
+  group_by(dataset) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+ggplot(ti_cat_summary, aes(x = dataset, y = prop, fill = ti_cat)) +
+  geom_col(width = 0.7) +
+  scale_y_continuous(name = "Fraction of perturbations", labels = scales::percent) +
+  scale_fill_brewer(palette = "Pastel1", name = "TI category") +
   labs(x = "") +
   theme_classic(base_size = 15) +
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 35, hjust = 1))
+  theme(axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "right")
 ```
 ```{r}
-ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_violin.png"),
-       width = 6, height = 5, dpi = 400)
+ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_categories.png"),
+       width = 7, height = 5, dpi = 400)
 ```
 
 # Unpaired results {.tabset}
