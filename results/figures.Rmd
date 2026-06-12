@@ -460,6 +460,221 @@ paired_90th
 paired_stat_90th
 ```
 
+# Paper Figures
+
+```{r paper-fig-setup, message=FALSE, warning=FALSE}
+# Shared helpers used across Figure 2 and Figure 3
+library(tidyr)
+library(cowplot)
+
+# Short display labels for methods (used in heatmaps; CSV tables use lowercase)
+method_order_csv <- c("mean", "project cor (eigen)", "project cor (gsva)",
+                      "network prop", "orthos", "scGPT", "stack")
+method_labels_hm <- c(
+  "mean"                = "Mean",
+  "project cor (eigen)" = "PC-Eigen",
+  "project cor (gsva)"  = "PC-GSVA",
+  "network prop"        = "NetProp",
+  "orthos"              = "Orthos",
+  "scGPT"               = "scGPT",
+  "stack"               = "Stack"
+)
+# Factor levels for heatmap y-axis: Mean at top, Stack at bottom
+hm_method_levels <- rev(method_labels_hm[method_order_csv])
+
+dataset_levels <- c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")
+
+recode_dataset <- function(x) {
+  dplyr::recode(x,
+    drugmatrix = "DrugMatrix", perturbseq = "Perturb-seq",
+    sciplex = "SciPlex", tahoe = "Tahoe"
+  )
+}
+
+# Reshape a wide paired-p table (from CSV) to long form with -log10(p) and
+# display labels applied
+paired_long <- function(df, regime) {
+  df %>%
+    tidyr::pivot_longer(-method, names_to = "col", values_to = "p") %>%
+    tidyr::separate(col, into = c("dataset", "metric"),
+                    sep = "_(?=[^_]+$)") %>%
+    dplyr::filter(!is.na(p)) %>%
+    dplyr::mutate(
+      regime      = regime,
+      neg_log10p  = pmin(-log10(pmax(p, 1e-30)), 30),
+      dataset     = factor(recode_dataset(dataset), levels = dataset_levels),
+      method      = dplyr::recode(method, !!!method_labels_hm),
+      method      = factor(method, levels = hm_method_levels)
+    )
+}
+```
+
+## Figure 2 — Control regime is a null baseline
+
+```{r paper-fig2, message=FALSE, warning=FALSE, fig.width=14, fig.height=9}
+# ── Panel A: Paired ctrl swarm across all 4 datasets, NES∆ only ──────────────
+ctrl_swarm_all <- dplyr::bind_rows(
+  readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "DrugMatrix"),
+  readRDS(file.path(RESULTS_PATH, "perturb-seq/ctrl_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "Perturb-seq"),
+  readRDS(file.path(RESULTS_PATH, "sciplex/ctrl_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "SciPlex"),
+  readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "Tahoe")
+) %>%
+  dplyr::filter(metric == "NES ∆") %>%
+  dplyr::mutate(
+    dataset = factor(dataset, levels = dataset_levels),
+    method  = factor(method,  levels = c("Mean", "NetworkProp", "ProjectCor (Eigen)",
+                                          "ProjectCor (GSVA)", "Orthos", "Stack"))
+  )
+
+swarm_xlabs <- c(
+  "Mean" = "Mean", "NetworkProp" = "Net\nProp",
+  "ProjectCor (Eigen)" = "PC\nEigen", "ProjectCor (GSVA)" = "PC\nGSVA",
+  "Orthos" = "Orthos", "Stack" = "Stack"
+)
+
+p_fig2a <- ggplot(ctrl_swarm_all, aes(x = method, y = value, color = method)) +
+  ggbeeswarm::geom_quasirandom(width = 0.2, alpha = 0.12, size = 0.04,
+                                groupOnX = TRUE) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey30",
+             linewidth = 0.7) +
+  stat_summary(fun = median, geom = "crossbar", width = 0.5,
+               linewidth = 0.5, color = "black") +
+  facet_wrap(~dataset, nrow = 1, scales = "free_y") +
+  scale_x_discrete(labels = swarm_xlabs) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(x = NULL, y = "Delta NES (predicted − source)") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "none",
+        strip.text      = element_text(face = "bold"),
+        axis.text.x     = element_text(size = 9))
+
+# ── Panel B: Paired NES meta-p for ctrl as a heatmap ─────────────────────────
+# All cells should be white (p ≈ 1), confirming the null result numerically.
+ctrl_hm_df <- paired_long(paired_ctrl, "ctrl") %>%
+  dplyr::filter(metric == "NES") %>%
+  dplyr::mutate(
+    p_label = dplyr::case_when(
+      p >= 0.99  ~ ">0.99",
+      p >= 0.05  ~ formatC(round(p, 2), digits = 2, format = "f"),
+      TRUE       ~ formatC(p, digits = 1, format = "e")
+    )
+  )
+
+p_fig2b <- ggplot(ctrl_hm_df, aes(x = dataset, y = method, fill = neg_log10p)) +
+  geom_tile(color = "white", linewidth = 0.6) +
+  geom_text(aes(label = p_label), size = 3, color = "grey30") +
+  scale_fill_gradient(low = "white", high = "#2166ac",
+                      name = "-log₁₀(p)", limits = c(0, 30),
+                      na.value = "grey90") +
+  labs(x = NULL, y = NULL,
+       subtitle = "Paired NES meta-p (ctrl) — all methods non-significant") +
+  theme_classic(base_size = 13) +
+  theme(axis.text.x  = element_text(angle = 35, hjust = 1),
+        panel.grid   = element_blank(),
+        legend.position = "right")
+
+fig2 <- plot_grid(p_fig2a, p_fig2b, nrow = 2,
+                  labels = c("A", "B"), label_size = 14,
+                  rel_heights = c(1.3, 1))
+fig2
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig2_ctrl_null.pdf"),
+       fig2, width = 14, height = 9, device = cairo_pdf)
+```
+
+## Figure 3 — Information scaling and method landscape
+
+```{r paper-fig3, message=FALSE, warning=FALSE, fig.width=14, fig.height=9}
+# ── Panel A: -log10(NES meta-p) heatmap, all three regimes ───────────────────
+# Faceted by regime: ctrl | 10th | 90th
+# White = not significant; dark blue = highly significant
+# Shows null in ctrl, then which methods/datasets improve with target data.
+
+all_regimes_hm <- dplyr::bind_rows(
+  paired_long(paired_ctrl, "ctrl"),
+  paired_long(paired_10th, "10th"),
+  paired_long(paired_90th, "90th")
+) %>%
+  dplyr::filter(metric == "NES") %>%
+  dplyr::mutate(
+    regime = factor(regime,
+                    levels = c("ctrl", "10th", "90th"),
+                    labels = c("Control", "10th percentile", "90th percentile")),
+    sig_label = dplyr::case_when(
+      p < 0.0001 ~ "****",
+      p < 0.001  ~ "***",
+      p < 0.01   ~ "**",
+      p < 0.05   ~ "*",
+      TRUE       ~ ""
+    )
+  )
+
+p_fig3a <- ggplot(all_regimes_hm,
+                  aes(x = dataset, y = method, fill = neg_log10p)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  geom_text(aes(label = sig_label), size = 3.5, color = "white",
+            vjust = 0.75) +
+  facet_wrap(~regime, nrow = 1) +
+  scale_fill_gradient(low = "white", high = "#2166ac",
+                      name = "-log₁₀(p)", limits = c(0, 30),
+                      na.value = "grey90") +
+  labs(x = NULL, y = NULL,
+       subtitle = "NES paired meta-p — significance of improvement over source") +
+  theme_classic(base_size = 13) +
+  theme(axis.text.x    = element_text(angle = 35, hjust = 1),
+        strip.text      = element_text(face = "bold"),
+        panel.grid      = element_blank(),
+        legend.position = "right")
+
+# ── Panel B: Method rank by W statistic in 90th regime ───────────────────────
+# Ranked within each dataset × metric column; 1 = highest W = best.
+# Demonstrates that no single method dominates across datasets and metrics.
+
+rank_90th_df <- paired_stat_90th %>%
+  tidyr::pivot_longer(-method, names_to = "col", values_to = "W") %>%
+  tidyr::separate(col, into = c("dataset", "metric"), sep = "_(?=[^_]+$)") %>%
+  dplyr::filter(!is.na(W)) %>%
+  dplyr::mutate(
+    dataset = factor(recode_dataset(dataset), levels = dataset_levels),
+    metric  = dplyr::recode(metric, NES = "NES", Jacc = "Jaccard"),
+    metric  = factor(metric, levels = c("NES", "Jaccard")),
+    method  = dplyr::recode(method, !!!method_labels_hm),
+    method  = factor(method, levels = hm_method_levels)
+  ) %>%
+  dplyr::group_by(dataset, metric) %>%
+  dplyr::mutate(rank = rank(-W, ties.method = "min")) %>%
+  dplyr::ungroup()
+
+p_fig3b <- ggplot(rank_90th_df, aes(x = dataset, y = method, fill = rank)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  geom_text(aes(label = rank), size = 3.5, color = "grey20") +
+  facet_wrap(~metric, nrow = 1) +
+  scale_fill_gradient(low = "#2166ac", high = "white",
+                      name = "Rank",
+                      na.value = "grey90") +
+  labs(x = NULL, y = NULL,
+       subtitle = "Method rank by W statistic (90th regime) — 1 = best per dataset") +
+  theme_classic(base_size = 13) +
+  theme(axis.text.x    = element_text(angle = 35, hjust = 1),
+        strip.text      = element_text(face = "bold"),
+        panel.grid      = element_blank(),
+        legend.position = "right")
+
+fig3 <- plot_grid(p_fig3a, p_fig3b, ncol = 1,
+                  labels = c("A", "B"), label_size = 14,
+                  rel_heights = c(1, 1))
+fig3
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig3_method_landscape.pdf"),
+       fig3, width = 14, height = 9, device = cairo_pdf)
+```
+
 # Tahoe {.tabset}
 
 ## Control {.tabset}
