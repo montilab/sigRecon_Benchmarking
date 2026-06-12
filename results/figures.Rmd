@@ -3541,23 +3541,66 @@ ti_delta_joined <- ti_delta_eval %>%
 ```
 
 ```{r}
-ti_comparisons <- list(
-  c("Low (0–0.1]", "Medium (0.1–0.5]"),
-  c("Medium (0.1–0.5]", "High (> 0.5)"),
-  c("Low (0–0.1]", "High (> 0.5)")
+# Pre-compute two-sided Wilcox p-values per dataset for each TI comparison pair.
+# Only retain p < 0.05; use ggsignif manual mode to avoid the ggpubr/ggsignif
+# bug where hide.ns = TRUE suppresses the label but still draws the bracket line.
+ti_comp_pairs <- tibble::tribble(
+  ~higher,              ~lower,
+  "Medium (0.1–0.5]",  "Low (0–0.1]",
+  "High (> 0.5)",      "Medium (0.1–0.5]",
+  "High (> 0.5)",      "Low (0–0.1]"
 )
+
+ti_signif_df <- purrr::map_dfr(
+  unique(ti_delta_joined$dataset),
+  function(ds) {
+    dat <- filter(ti_delta_joined, dataset == ds)
+    purrr::pmap_dfr(ti_comp_pairs, function(higher, lower) {
+      x <- dat %>% filter(ti_cat == higher) %>% pull(delta_NES)
+      y <- dat %>% filter(ti_cat == lower)  %>% pull(delta_NES)
+      if (length(x) < 3 || length(y) < 3) return(NULL)
+      p <- wilcox.test(x, y)$p.value
+      tibble(dataset = ds,
+             xmin = lower, xmax = higher,   # left→right bracket positions on x-axis
+             p_value = p)
+    })
+  }
+) %>%
+  filter(p_value < 0.05) %>%
+  mutate(
+    annotations = case_when(
+      p_value < 0.0001 ~ "****",
+      p_value < 0.001  ~ "***",
+      p_value < 0.01   ~ "**",
+      TRUE             ~ "*"
+    ),
+    dataset = factor(dataset, levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe"))
+  )
+
+# Compute per-dataset y-positions for stacked brackets (data-scale, free_y safe)
+y_stats <- ti_delta_joined %>%
+  group_by(dataset) %>%
+  summarize(y_max   = max(delta_NES, na.rm = TRUE),
+            y_range = diff(range(delta_NES, na.rm = TRUE)),
+            .groups = "drop")
+
+ti_signif_df <- ti_signif_df %>%
+  left_join(y_stats, by = "dataset") %>%
+  group_by(dataset) %>%
+  mutate(y_position = y_max + row_number() * y_range * 0.13) %>%
+  ungroup()
 
 ggplot(ti_delta_joined, aes(x = ti_cat, y = delta_NES, fill = ti_cat)) +
   geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.3, linewidth = 0.5) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey40", linewidth = 0.7) +
-  ggpubr::stat_compare_means(
-    comparisons = ti_comparisons,
-    method      = "wilcox.test",
-    alternative = "greater",
-    label       = "p.signif",
-    hide.ns     = TRUE,
-    tip.length  = 0.01,
-    size        = 3.5
+  ggsignif::geom_signif(
+    data        = ti_signif_df,
+    aes(xmin = xmin, xmax = xmax,
+        annotations = annotations, y_position = y_position),
+    manual      = TRUE,
+    inherit.aes = FALSE,
+    tip_length  = 0.01,
+    textsize    = 3.5
   ) +
   facet_wrap(~dataset, scales = "free_y", ncol = 2) +
   scale_fill_brewer(palette = "Pastel1") +
