@@ -87,11 +87,20 @@ ti_df <- bind_rows(
 ```
 
 ```{r}
-ggplot(ti_df, aes(x = TI, fill = dataset, color = dataset)) +
+# KDE computed on log1p(TI) so density is estimated on the transformed scale;
+# x-axis back-labelled with original TI values. Y-axis on log10 scale to
+# reveal tail structure obscured by the zero-heavy distributions.
+ggplot(ti_df, aes(x = log1p(TI), fill = dataset, color = dataset)) +
   geom_density(alpha = 0.45, linewidth = 0.8) +
+  scale_x_continuous(
+    name = "TI",
+    breaks = log1p(c(0, 0.1, 0.25, 0.5, 1, 2, 3)),
+    labels = c("0", "0.1", "0.25", "0.5", "1", "2", "3")
+  ) +
+  scale_y_log10(name = "Density") +
   scale_fill_brewer(palette = "Pastel1") +
   scale_color_brewer(palette = "Pastel1") +
-  labs(x = "TI", y = "Density", fill = "Dataset", color = "Dataset") +
+  labs(fill = "Dataset", color = "Dataset") +
   theme_classic(base_size = 15) +
   theme(legend.position = "right",
         strip.text = element_text(face = "bold"))
@@ -102,11 +111,17 @@ ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_density.png"),
 ```
 
 ```{r}
+# log1p y-axis: handles the zero mass while spreading the long upper tail
 ggplot(ti_df, aes(x = dataset, y = TI, fill = dataset)) +
   geom_violin(alpha = 0.7, color = NA) +
   stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
+  scale_y_continuous(
+    trans  = "log1p",
+    breaks = c(0, 0.1, 0.25, 0.5, 1, 2, 3),
+    name   = "TI"
+  ) +
   scale_fill_brewer(palette = "Pastel1") +
-  labs(x = "", y = "TI") +
+  labs(x = "") +
   theme_classic(base_size = 15) +
   theme(legend.position = "none",
         axis.text.x = element_text(angle = 35, hjust = 1))
