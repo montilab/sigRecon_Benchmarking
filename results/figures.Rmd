@@ -107,6 +107,30 @@ ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_ecdf.png"),
 ```
 
 ```{r}
+# Complementary CDF (survival function: 1 - ECDF) — log-log axes.
+# Reads as "fraction of perturbations with TI > x". Log-log reveals
+# tail heaviness and potential power-law structure across datasets.
+ti_ccdf_df <- ti_df %>%
+  group_by(dataset) %>%
+  arrange(TI, .by_group = TRUE) %>%
+  mutate(ccdf = 1 - (seq_len(n()) / n())) %>%
+  ungroup()
+
+ggplot(ti_ccdf_df %>% filter(TI > 0),
+       aes(x = TI, y = ccdf, color = dataset)) +
+  geom_line(linewidth = 0.9) +
+  scale_x_log10(name = "TI") +
+  scale_y_log10(name = "Fraction with TI > x", labels = scales::percent) +
+  scale_color_brewer(palette = "Set1", name = "Dataset") +
+  theme_classic(base_size = 15) +
+  theme(legend.position = "right")
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_ccdf.png"),
+       width = 8, height = 5, dpi = 400)
+```
+
+```{r}
 # Proportional bar chart by TI category.
 # Bins: zero, low (0, 0.1], medium (0.1, 0.5], high (> 0.5)
 ti_cat_df <- ti_df %>%
