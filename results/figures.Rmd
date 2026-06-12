@@ -3425,7 +3425,7 @@ ti_ccdf_df <- ti_df %>%
   mutate(ccdf = 1 - (seq_len(n()) / n())) %>%
   ungroup()
 
-ggplot(ti_ccdf_df %>% filter(TI > 0),
+p_ccdf <- ggplot(ti_ccdf_df %>% filter(TI > 0),
        aes(x = TI, color = dataset)) +
   geom_line(aes(y = ccdf), linewidth = 0.9) +
   # scale_x_log10(name = "TI") +
@@ -3433,6 +3433,7 @@ ggplot(ti_ccdf_df %>% filter(TI > 0),
   scale_color_brewer(palette = "Paired", name = "Dataset") +
   theme_classic(base_size = 15) +
   theme(legend.position = "right")
+p_ccdf
 ```
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_ccdf.png"),
@@ -3459,7 +3460,7 @@ ti_cat_summary <- ti_cat_df %>%
   mutate(prop = n / sum(n)) %>%
   ungroup()
 
-ggplot(ti_cat_summary, aes(x = dataset, y = prop, fill = ti_cat)) +
+p_bar <- ggplot(ti_cat_summary, aes(x = dataset, y = prop, fill = ti_cat)) +
   geom_col(width = 0.7) +
   scale_y_continuous(name = "Fraction of perturbations", labels = scales::percent) +
   scale_fill_brewer(palette = "Paired", name = "TI category") +
@@ -3467,6 +3468,7 @@ ggplot(ti_cat_summary, aes(x = dataset, y = prop, fill = ti_cat)) +
   theme_classic(base_size = 15) +
   theme(axis.text.x = element_text(angle = 35, hjust = 1),
         legend.position = "right")
+p_bar
 ```
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_categories.png"),
@@ -3590,7 +3592,7 @@ ti_signif_df <- ti_signif_df %>%
   mutate(y_position = y_max + row_number() * y_range * 0.13) %>%
   ungroup()
 
-ggplot(ti_delta_joined, aes(x = ti_cat, y = delta_NES, fill = ti_cat)) +
+p_delta <- ggplot(ti_delta_joined, aes(x = ti_cat, y = delta_NES, fill = ti_cat)) +
   geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.3, linewidth = 0.5) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey40", linewidth = 0.7) +
   ggsignif::geom_signif(
@@ -3613,8 +3615,23 @@ ggplot(ti_delta_joined, aes(x = ti_cat, y = delta_NES, fill = ti_cat)) +
     strip.text    = element_text(face = "bold"),
     panel.spacing = unit(1.5, "lines")
   )
+p_delta
 ```
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/ti_delta_nes_by_category.png"),
        width = 9, height = 7, dpi = 400)
+```
+
+```{r ti-combined-panel}
+# Row 1: CCDF (left) + stacked bar chart (right)
+# Row 2: Delta NES × TI boxplot (full width)
+top_row   <- cowplot::plot_grid(p_ccdf, p_bar, nrow = 1, labels = c("A", "B"),
+                                label_size = 14, rel_widths = c(1, 0.8))
+panel_fig <- cowplot::plot_grid(top_row, p_delta, ncol = 1, labels = c("", "C"),
+                                label_size = 14, rel_heights = c(1, 1.2))
+panel_fig
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/ti_combined_panel.pdf"),
+       panel_fig, width = 14, height = 12, device = "pdf")
 ```
