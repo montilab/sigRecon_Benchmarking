@@ -3544,11 +3544,26 @@ ti_delta_joined <- ti_delta_eval %>%
 ```
 
 ```{r}
+ti_comparisons <- list(
+  c("Low (0–0.1]", "Medium (0.1–0.5]"),
+  c("Medium (0.1–0.5]", "High (> 0.5)"),
+  c("Low (0–0.1]", "High (> 0.5)")
+)
+
 ggplot(ti_delta_joined, aes(x = ti_cat, y = delta_NES, fill = ti_cat)) +
   geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.3, linewidth = 0.5) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey40", linewidth = 0.7) +
+  ggpubr::stat_compare_means(
+    comparisons = ti_comparisons,
+    method      = "wilcox.test",
+    label       = "p.signif",
+    hide.ns     = TRUE,
+    tip.length  = 0.01,
+    size        = 3.5
+  ) +
   facet_wrap(~dataset, scales = "free_y", ncol = 2) +
   scale_fill_brewer(palette = "Pastel1") +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.2))) +
   labs(x = "TI category", y = "Delta NES (predicted − source)") +
   theme_classic(base_size = 14) +
   theme(
