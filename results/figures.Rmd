@@ -67,6 +67,55 @@ summarize_method <- function(df, method_name){
 }
 ```
 
+# TI Distributions
+
+```{r ti-distributions, message=FALSE, warning=FALSE}
+ti_path <- file.path(PROJECT_PATH, "results/plots/trade_metric_correlations")
+
+ti_df <- bind_rows(
+  readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds")) %>%
+    transmute(dataset = "DrugMatrix", TI),
+  readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>%
+    transmute(dataset = "Perturb-seq", TI),
+  readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds")) %>%
+    transmute(dataset = "SciPlex", TI),
+  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds")) %>%
+    transmute(dataset = "Tahoe", TI)
+) %>%
+  filter(is.finite(TI)) %>%
+  mutate(dataset = factor(dataset, levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")))
+```
+
+```{r}
+ggplot(ti_df, aes(x = TI, fill = dataset, color = dataset)) +
+  geom_density(alpha = 0.45, linewidth = 0.8) +
+  scale_fill_brewer(palette = "Pastel1") +
+  scale_color_brewer(palette = "Pastel1") +
+  labs(x = "TI", y = "Density", fill = "Dataset", color = "Dataset") +
+  theme_classic(base_size = 15) +
+  theme(legend.position = "right",
+        strip.text = element_text(face = "bold"))
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_density.png"),
+       width = 8, height = 5, dpi = 400)
+```
+
+```{r}
+ggplot(ti_df, aes(x = dataset, y = TI, fill = dataset)) +
+  geom_violin(alpha = 0.7, color = NA) +
+  stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white") +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(x = "", y = "TI") +
+  theme_classic(base_size = 15) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 35, hjust = 1))
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_violin.png"),
+       width = 6, height = 5, dpi = 400)
+```
+
 # Unpaired results {.tabset}
 
 ```{r unpaired-results, message=FALSE, warning=FALSE}
