@@ -3405,7 +3405,7 @@ ggplot(ti_df, aes(x = log1p(TI), color = dataset)) +
     labels = c("0", "0.1", "0.25", "0.5", "1", "2", "3")
   ) +
   scale_y_continuous(name = "Cumulative fraction", labels = scales::percent) +
-  scale_color_brewer(palette = "Set1", name = "Dataset") +
+  scale_color_brewer(palette = "Paired", name = "Dataset") +
   theme_classic(base_size = 15) +
   theme(legend.position = "right")
 ```
@@ -3430,7 +3430,7 @@ ggplot(ti_ccdf_df %>% filter(TI > 0),
   geom_line(aes(y = ccdf), linewidth = 0.9) +
   # scale_x_log10(name = "TI") +
   scale_y_log10(name = "Fraction with TI > x", labels = scales::percent) +
-  scale_color_brewer(palette = "Set1", name = "Dataset") +
+  scale_color_brewer(palette = "Paired", name = "Dataset") +
   theme_classic(base_size = 15) +
   theme(legend.position = "right")
 ```
@@ -3462,7 +3462,7 @@ ti_cat_summary <- ti_cat_df %>%
 ggplot(ti_cat_summary, aes(x = dataset, y = prop, fill = ti_cat)) +
   geom_col(width = 0.7) +
   scale_y_continuous(name = "Fraction of perturbations", labels = scales::percent) +
-  scale_fill_brewer(palette = "Pastel1", name = "TI category") +
+  scale_fill_brewer(palette = "Paired", name = "TI category") +
   labs(x = "") +
   theme_classic(base_size = 15) +
   theme(axis.text.x = element_text(angle = 35, hjust = 1),
@@ -3603,7 +3603,7 @@ ggplot(ti_delta_joined, aes(x = ti_cat, y = delta_NES, fill = ti_cat)) +
     textsize    = 3.5
   ) +
   facet_wrap(~dataset, scales = "free_y", ncol = 2) +
-  scale_fill_brewer(palette = "Pastel1") +
+  scale_fill_brewer(palette = "Paired") +
   scale_y_continuous(expand = expansion(mult = c(0.05, 0.2))) +
   labs(x = "TI category", y = "Delta NES (predicted − source)") +
   theme_classic(base_size = 14) +
