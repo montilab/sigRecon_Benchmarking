@@ -3396,8 +3396,8 @@ ti_df <- bind_rows(
 # ECDF — shaded area + step line per dataset, log1p x-axis.
 # stat_ecdf called twice: once as "area" for fill, once as "step" for the line.
 # The jump at x=0 shows the zero-inflation fraction for each dataset.
-ggplot(ti_df, aes(x = log1p(TI), color = dataset, fill = dataset)) +
-  stat_ecdf(geom = "area", alpha = 0.35, linewidth = 0) +
+ggplot(ti_df, aes(x = log1p(TI), color = dataset)) +
+  stat_ecdf(geom = "line", alpha = 0.35, linewidth = 0) +
   stat_ecdf(linewidth = 0.9) +
   scale_x_continuous(
     name   = "TI",
@@ -3405,8 +3405,7 @@ ggplot(ti_df, aes(x = log1p(TI), color = dataset, fill = dataset)) +
     labels = c("0", "0.1", "0.25", "0.5", "1", "2", "3")
   ) +
   scale_y_continuous(name = "Cumulative fraction", labels = scales::percent) +
-  scale_color_brewer(palette = "Pastel1", name = "Dataset") +
-  scale_fill_brewer(palette = "Pastel1", name = "Dataset") +
+  scale_color_brewer(palette = "Set1", name = "Dataset") +
   theme_classic(base_size = 15) +
   theme(legend.position = "right")
 ```
@@ -3427,13 +3426,11 @@ ti_ccdf_df <- ti_df %>%
   ungroup()
 
 ggplot(ti_ccdf_df %>% filter(TI > 0),
-       aes(x = TI, color = dataset, fill = dataset)) +
-  geom_ribbon(aes(ymin = 1e-4, ymax = ccdf), alpha = 0.35, color = NA) +
+       aes(x = TI, color = dataset)) +
   geom_line(aes(y = ccdf), linewidth = 0.9) +
-  scale_x_log10(name = "TI") +
+  # scale_x_log10(name = "TI") +
   scale_y_log10(name = "Fraction with TI > x", labels = scales::percent) +
-  scale_color_brewer(palette = "Pastel1", name = "Dataset") +
-  scale_fill_brewer(palette = "Pastel1", name = "Dataset") +
+  scale_color_brewer(palette = "Set1", name = "Dataset") +
   theme_classic(base_size = 15) +
   theme(legend.position = "right")
 ```
@@ -3556,6 +3553,7 @@ ggplot(ti_delta_joined, aes(x = ti_cat, y = delta_NES, fill = ti_cat)) +
   ggpubr::stat_compare_means(
     comparisons = ti_comparisons,
     method      = "wilcox.test",
+    alternative = "greater",
     label       = "p.signif",
     hide.ns     = TRUE,
     tip.length  = 0.01,
