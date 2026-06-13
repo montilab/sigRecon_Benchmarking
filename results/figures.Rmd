@@ -3084,7 +3084,7 @@ fig3 <- ggplot(fig3_df, aes(x = dataset, y = method, fill = neg_log10p)) +
   geom_text(aes(label = rank_label), size = 5, fontface = "bold",
             color = "grey15") +
   facet_grid(regime ~ metric) +
-  scale_fill_distiller(palette = "YlGn", direction = 1,
+  scale_fill_distiller(palette = "GnBu", direction = 1,
                        name = "-log₁₀(p)", limits = c(0, 30),
                        na.value = "grey90") +
   labs(x = NULL, y = NULL) +
