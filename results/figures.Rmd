@@ -2520,12 +2520,11 @@ ggplot(
 ```
 
 ```{r}
-ggsave(
-  file.path(PROJECT_PATH, "results/plots/tahoe_moa_fine_delta_NES_methods.png"),
-  width = 14,
-  height = 10,
-  dpi = 400
-)
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig5_tahoe_moa.pdf"),
+       width = 14,
+       height = 10,
+       dpi = 400, 
+       device = "pdf")
 ```
 
 ## Gain Heatmaps
@@ -2970,7 +2969,7 @@ ggsave(
 
 # Paper Figures
 
-## Figure 2 — Control regime is a null baseline
+## Figure 2: Control regime is a null baseline
 
 ```{r paper-fig2, message=FALSE, warning=FALSE, fig.width=14, fig.height=9}
 # Load ctrl swarm data for all 4 datasets (both metrics combined).
@@ -3093,7 +3092,7 @@ ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig2_ctrl_null.pdf"),
        fig2, width = 14, height = 9, device = cairo_pdf)
 ```
 
-## Figure 3 — Information scaling and method landscape
+## Figure 3: Information scaling and method landscape
 
 ```{r paper-fig3, message=FALSE, warning=FALSE, fig.width=12, fig.height=9}
 # Each cell: fill = -log10(Fisher NES/Jacc meta-p); label = rank by median W
@@ -3296,7 +3295,7 @@ ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_categories.png"),
        width = 7, height = 5, dpi = 400)
 ```
 
-## TI × Delta NES (90th regime, best method per dataset)
+## Figure 6: TI × Delta NES (90th regime, best method per dataset)
 
 ```{r ti-delta-nes, message=FALSE, warning=FALSE}
 # Best method per dataset by median NES Wilcoxon W statistic in the 90th regime:
@@ -3451,7 +3450,8 @@ panel_fig <- cowplot::plot_grid(top_row, p_delta, ncol = 1, labels = c("", "C"),
                                 label_size = 14, rel_heights = c(1, 1.2))
 panel_fig
 ```
+
 ```{r}
-ggsave(file.path(PROJECT_PATH, "results/plots/ti_combined_panel.pdf"),
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig6_combined_panel.pdf"),
        panel_fig, width = 14, height = 12, device = "pdf")
 ```
