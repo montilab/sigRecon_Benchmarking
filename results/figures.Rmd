@@ -995,7 +995,9 @@ if (do_save_drugmatrix) {
       transmute(drug = gene, method = "ProjectCor (Eigen)", jacc = jacc_TRUE, NES = NES_TRUE),
 
     drugmatrix_ctrl_proj_g_df %>%
-      transmute(drug = gene, method = "ProjectCor (GSVA)", jacc = jacc_TRUE, NES = NES_TRUE)
+      transmute(drug = gene, method = "ProjectCor (GSVA)", jacc = jacc_TRUE, NES = NES_TRUE),
+  drugmatrix_ctrl_orthos_df %>%
+      transmute(drug = gene, method = "Orthos", jacc = jacc_TRUE, NES = NES_TRUE)
   )
 
   plot_long <- plot_df %>%
@@ -1008,7 +1010,8 @@ if (do_save_drugmatrix) {
     summarize_method(drugmatrix_ctrl_mean_df, "Mean"),
     summarize_method(drugmatrix_ctrl_net_df, "NetworkProp"),
     summarize_method(drugmatrix_ctrl_proj_e_df, "ProjectCor (Eigen)"),
-    summarize_method(drugmatrix_ctrl_proj_g_df, "ProjectCor (GSVA)")
+    summarize_method(drugmatrix_ctrl_proj_g_df, "ProjectCor (GSVA)"),
+    summarize_method(drugmatrix_ctrl_orthos_df, "Orthos")
   )
   saveRDS(summary_df, file.path(RESULTS_PATH, "drugmatrix/ctrl_paired_plot_df.rds"))
 } else {
@@ -1058,7 +1061,7 @@ ggplot(plot_long, aes(method, value, fill = method)) +
   ) +
 
   scale_fill_brewer(palette = "Pastel1") +
-  scale_x_discrete(limits = c("No change", "Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)")) + 
+  scale_x_discrete(limits = c("No change", "Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Orthos")) + 
   labs(
     x = "",
     y = "Score"
@@ -1151,7 +1154,7 @@ ggplot(plot_long, aes(method, value, fill = method)) +
   ) +
 
   scale_fill_brewer(palette = "Pastel1") +
-  scale_x_discrete(limits = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)")) + 
+  scale_x_discrete(limits = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Orthos")) + 
 
   labs(
     x = "",
