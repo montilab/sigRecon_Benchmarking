@@ -973,6 +973,7 @@ if (do_save_drugmatrix) {
   drugmatrix_ctrl_net_df    <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_networkprop_eval_table.rds"))
   drugmatrix_ctrl_proj_e_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_projectcor_eigen_eval_table.rds"))
   drugmatrix_ctrl_proj_g_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_projectcor_gsva_eval_table.rds"))
+  drugmatrix_ctrl_orthos_df <- readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_orthos_residual_eval_table.rds"))
 }
 ```
 
@@ -1097,7 +1098,10 @@ if (do_save_drugmatrix) {
       transmute(drug = gene, method = "ProjectCor (Eigen)", jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
 
     drugmatrix_ctrl_proj_g_df %>%
-      transmute(drug = gene, method = "ProjectCor (GSVA)", jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE)
+      transmute(drug = gene, method = "ProjectCor (GSVA)", jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE),
+
+    drugmatrix_ctrl_orthos_df %>%
+      transmute(drug = gene, method = "Orthos", jacc_delta = jacc_TRUE - jacc_FALSE, NES_delta = NES_TRUE - NES_FALSE)
   )
 
   plot_long <- plot_df %>%
@@ -2990,7 +2994,7 @@ method_pal_fig2 <- setNames(
 
 # Methods available per dataset (in desired x-axis order)
 ds_methods <- list(
-  "DrugMatrix"  = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)"),
+  "DrugMatrix"  = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Orthos"),
   "Perturb-seq" = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Stack"),
   "SciPlex"     = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Orthos", "Stack"),
   "Tahoe"       = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Orthos", "Stack")
@@ -3036,7 +3040,7 @@ row_nes <- cowplot::plot_grid(
   make_ds_panel("SciPlex",     "NES \u2206", show_title = TRUE,  show_ylab = FALSE),
   make_ds_panel("Tahoe",       "NES \u2206", show_title = TRUE,  show_ylab = FALSE),
   nrow = 1, align = "hv", axis = "tb",
-  rel_widths = c(4, 5, 6, 6)   # proportional to method count
+  rel_widths = c(5, 5, 6, 6)   # proportional to method count
 )
 
 # Row B: Jaccard∆ — no repeated titles, y-label updated
@@ -3073,7 +3077,7 @@ row_jacc <- cowplot::plot_grid(
   make_ds_panel_jacc("SciPlex",     show_ylab = FALSE),
   make_ds_panel_jacc("Tahoe",       show_ylab = FALSE),
   nrow = 1, align = "hv", axis = "tb",
-  rel_widths = c(4, 5, 6, 6)
+  rel_widths = c(5, 5, 6, 6)
 )
 
 fig2 <- cowplot::plot_grid(row_nes, row_jacc, ncol = 1,
