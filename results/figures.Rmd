@@ -2520,7 +2520,7 @@ ggplot(
 ```
 
 ```{r}
-ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig5_tahoe_moa.pdf"),
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig4_tahoe_moa.pdf"),
        width = 14,
        height = 10,
        dpi = 400, 
@@ -3482,6 +3482,6 @@ panel_fig
 ```
 
 ```{r}
-ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig6_combined_panel.pdf"),
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig5_combined_panel.pdf"),
        panel_fig, width = 14, height = 12, device = "pdf")
 ```

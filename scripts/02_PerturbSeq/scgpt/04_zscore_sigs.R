@@ -11,6 +11,7 @@ registerDoParallel(15)
 
 PATH <- file.path(Sys.getenv("MLAB"), "projects/brcameta/projects/sig_recon")
 DATA_PATH <- file.path(PATH, "data/scgpt/prediction_results/")
+SAVE_PATH <- file.path(PATH, "data/sigs/perturb-seq/scgpt/")
 
 # Helper function to calculate signatures
 calculate_signatures <- function(ad_obj, output_name) {
@@ -70,30 +71,30 @@ calculate_signatures <- function(ad_obj, output_name) {
 # (Contains K562 perturbations and RPE1 controls)
 k562_rpe1_adata <- anndata::read_h5ad(file.path(DATA_PATH, "k562_rpe1_with_rpe1_ctrl_10th.h5ad"))
 k562_10th_df <- calculate_signatures(k562_rpe1_adata, "k562")
-write_csv(k562_10th_df, file.path(DATA_PATH, "k562_10th_df.csv")) # Optional CSV for easy viewing
+write_csv(k562_10th_df, file.path(SAVE_PATH, "k562_10th_df.csv")) # Optional CSV for easy viewing
 
 # --- Process RPE1 10th Data ---
 # (Contains RPE1 perturbations and K562 controls)
 rpe1_k562_adata <- anndata::read_h5ad(file.path(DATA_PATH, "rpe1_k562_with_k562_ctrl_10th.h5ad"))
 rpe1_10th_df <- calculate_signatures(rpe1_k562_adata, "rpe1")
-write_csv(rpe1_10th_df, file.path(DATA_PATH, "rpe1_10th_df.csv"))
+write_csv(rpe1_10th_df, file.path(SAVE_PATH, "rpe1_10th_df.csv"))
 
 # --- Process K562 90th Data ---
 # (Contains K562 perturbations and RPE1 controls)
 k562_rpe1_adata <- anndata::read_h5ad(file.path(DATA_PATH, "k562_rpe1_with_rpe1_ctrl_90th.h5ad"))
 k562_90th_df <- calculate_signatures(k562_rpe1_adata, "k562")
-write_csv(k562_90th_df, file.path(DATA_PATH, "k562_90th_df.csv")) # Optional CSV for easy viewing
+write_csv(k562_90th_df, file.path(SAVE_PATH, "k562_90th_df.csv")) # Optional CSV for easy viewing
 
 # --- Process RPE1 90th Data ---
 # (Contains RPE1 perturbations and K562 controls)
 rpe1_k562_adata <- anndata::read_h5ad(file.path(DATA_PATH, "rpe1_k562_with_k562_ctrl_90th.h5ad"))
 rpe1_90th_df <- calculate_signatures(rpe1_k562_adata, "rpe1")
-write_csv(rpe1_90th_df, file.path(DATA_PATH, "rpe1_90th_df.csv"))
+write_csv(rpe1_90th_df, file.path(SAVE_PATH, "rpe1_90th_df.csv"))
 
-k562_10th_df <- read_csv(file.path(DATA_PATH, "k562_10th_df.csv")) # Optional CSV for easy viewing
-rpe1_10th_df <- read_csv(file.path(DATA_PATH, "rpe1_10th_df.csv"))
-k562_90th_df <- read_csv(file.path(DATA_PATH, "k562_90th_df.csv")) # Optional CSV for easy viewing
-rpe1_90th_df <- read_csv(file.path(DATA_PATH, "rpe1_90th_df.csv"))
+k562_10th_df <- read_csv(file.path(SAVE_PATH, "k562_10th_df.csv")) # Optional CSV for easy viewing
+rpe1_10th_df <- read_csv(file.path(SAVE_PATH, "rpe1_10th_df.csv"))
+k562_90th_df <- read_csv(file.path(SAVE_PATH, "k562_90th_df.csv")) 
+rpe1_90th_df <- read_csv(file.path(SAVE_PATH, "rpe1_90th_df.csv"))
 
 # ## Saving as named list
 k562_10th_df <- k562_10th_df %>%
@@ -119,11 +120,11 @@ k562_10th_df[k562_10th_df$adj_p < 0.1,]
 # When using a p-value filter of 0.05, only 9 perturbations show up with 1-2 genes each. Using a less strict filter of 0.1.
 k562_10th_sigs <- sig_filter_fn(k562_10th_df, perts = unique(k562_10th_df$pert_id), pert_col = "pert_id", log2fc_col = "z_score", pval_col = "adj_p", alpha = 1, geneid_col = "gene_symbol")
 rpe1_10th_sigs <- sig_filter_fn(rpe1_10th_df, perts = unique(rpe1_10th_df$pert_id), pert_col = "pert_id", log2fc_col = "z_score", pval_col = "adj_p", alpha = 1, geneid_col = "gene_symbol")
-saveRDS(k562_10th_sigs, file.path(DATA_PATH, "k562_10th_sigs.rds"))
-saveRDS(rpe1_10th_sigs, file.path(DATA_PATH, "rpe1_10th_sigs.rds"))
+saveRDS(k562_10th_sigs, file.path(SAVE_PATH, "k562_10th_sigs.rds"))
+saveRDS(rpe1_10th_sigs, file.path(SAVE_PATH, "rpe1_10th_sigs.rds"))
 
 k562_90th_sigs <- sig_filter_fn(k562_90th_df, perts = unique(k562_90th_df$pert_id), pert_col = "pert_id", log2fc_col = "z_score", pval_col = "adj_p", alpha = 1, geneid_col = "gene_symbol")
 rpe1_90th_sigs <- sig_filter_fn(rpe1_90th_df, perts = unique(rpe1_90th_df$pert_id), pert_col = "pert_id", log2fc_col = "z_score", pval_col = "adj_p", alpha = 1, geneid_col = "gene_symbol")
-saveRDS(k562_90th_sigs, file.path(DATA_PATH, "k562_90th_sigs.rds"))
-saveRDS(rpe1_90th_sigs, file.path(DATA_PATH, "rpe1_90th_sigs.rds"))
+saveRDS(k562_90th_sigs, file.path(SAVE_PATH, "k562_90th_sigs.rds"))
+saveRDS(rpe1_90th_sigs, file.path(SAVE_PATH, "rpe1_90th_sigs.rds"))
 
