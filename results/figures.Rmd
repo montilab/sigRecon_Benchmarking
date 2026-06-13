@@ -2969,6 +2969,36 @@ ggsave(
 
 # Paper Figures
 
+```{r paper-fig-setup, message=FALSE, warning=FALSE}
+# Shared constants for paper figures
+dataset_levels <- c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")
+
+recode_dataset <- function(x) {
+  dplyr::recode(x,
+    drugmatrix  = "DrugMatrix",
+    perturbseq  = "Perturb-seq",
+    sciplex     = "SciPlex",
+    tahoe       = "Tahoe"
+  )
+}
+
+# Method label mapping: CSV name -> display label (for Figure 3 heatmap)
+method_labels_hm <- c(
+  "mean"               = "Mean",
+  "project cor (eigen)"= "PC-Eigen",
+  "project cor (gsva)" = "PC-GSVA",
+  "network prop"       = "NetProp",
+  "orthos"             = "Orthos",
+  "scGPT"              = "scGPT",
+  "stack"              = "Stack"
+)
+
+# Display order for heatmap y-axis (Mean at top, Stack at bottom)
+method_order_csv  <- c("mean", "project cor (eigen)", "project cor (gsva)",
+                        "network prop", "orthos", "scGPT", "stack")
+hm_method_levels  <- rev(unname(method_labels_hm[method_order_csv]))
+```
+
 ## Figure 2: Control regime is a null baseline
 
 ```{r paper-fig2, message=FALSE, warning=FALSE, fig.width=14, fig.height=9}
