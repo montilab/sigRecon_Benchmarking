@@ -2966,7 +2966,9 @@ ggsave(
 ## Figure 2 — Control regime is a null baseline
 
 ```{r paper-fig2, message=FALSE, warning=FALSE, fig.width=14, fig.height=9}
-# Load ctrl swarm data for all 4 datasets (both metrics combined)
+# Load ctrl swarm data for all 4 datasets (both metrics combined).
+# Each dataset has a different method subset, so we build per-dataset plots and
+# stitch them with cowplot — this avoids empty x-axis slots from missing methods.
 ctrl_swarm_all <- dplyr::bind_rows(
   readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_paired_swarm_plot_df.rds")) %>%
     dplyr::mutate(dataset = "DrugMatrix"),
@@ -2977,17 +2979,32 @@ ctrl_swarm_all <- dplyr::bind_rows(
   readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_paired_swarm_plot_df.rds")) %>%
     dplyr::mutate(dataset = "Tahoe")
 ) %>%
-  dplyr::mutate(
-    dataset = factor(dataset, levels = dataset_levels),
-    method  = factor(method, levels = c("Mean", "NetworkProp", "ProjectCor (Eigen)",
-                                         "ProjectCor (GSVA)", "Orthos", "Stack"))
-  )
+  dplyr::mutate(dataset = factor(dataset, levels = dataset_levels))
 
-# Mirror aesthetics used in per-dataset ctrl paired swarm sections:
-#   violin + quasirandom overlay, white median dot, Pastel1 fill, dotted zero line
-make_ctrl_swarm <- function(metric_name, y_label, show_strip = TRUE) {
-  ggplot(ctrl_swarm_all %>% dplyr::filter(metric == metric_name),
-         aes(x = method, y = value, fill = method)) +
+# Fixed Pastel1 colors keyed by method name for consistency across panels
+method_pal_fig2 <- setNames(
+  RColorBrewer::brewer.pal(6, "Pastel1"),
+  c("Mean", "NetworkProp", "ProjectCor (Eigen)",
+    "ProjectCor (GSVA)", "Orthos", "Stack")
+)
+
+# Methods available per dataset (in desired x-axis order)
+ds_methods <- list(
+  "DrugMatrix"  = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)"),
+  "Perturb-seq" = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Stack"),
+  "SciPlex"     = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Orthos", "Stack"),
+  "Tahoe"       = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Orthos", "Stack")
+)
+
+# One panel per dataset, one row per metric
+make_ds_panel <- function(ds, metric_name,
+                           show_title = TRUE, show_ylab = TRUE) {
+  methods <- ds_methods[[ds]]
+  dat <- ctrl_swarm_all %>%
+    dplyr::filter(dataset == ds, metric == metric_name) %>%
+    dplyr::mutate(method = factor(method, levels = methods))
+
+  p <- ggplot(dat, aes(x = method, y = value, fill = method)) +
     geom_violin(width = 0.9, alpha = 0.35, color = NA) +
     ggbeeswarm::geom_quasirandom(width = 0.15, alpha = 0.15, size = 0.05,
                                   groupOnX = TRUE) +
@@ -2995,24 +3012,71 @@ make_ctrl_swarm <- function(metric_name, y_label, show_strip = TRUE) {
                  fill = "white") +
     geom_hline(yintercept = 0, linetype = "dotted", color = "grey50",
                linewidth = 0.8) +
-    facet_wrap(~dataset, nrow = 1, scales = "free_y") +
-    scale_fill_brewer(palette = "Pastel1") +
-    scale_x_discrete(limits = c("Mean", "NetworkProp", "ProjectCor (Eigen)",
-                                 "ProjectCor (GSVA)", "Orthos", "Stack")) +
-    labs(x = "", y = y_label) +
+    scale_fill_manual(values = method_pal_fig2) +
+    scale_x_discrete(limits = methods) +
+    labs(x = "",
+         y = if (show_ylab) "Delta NES" else "") +
     theme_classic(base_size = 15) +
-    theme(
-      axis.text.x     = element_text(angle = 35, hjust = 1),
-      legend.position = "none",
-      strip.text      = if (show_strip) element_text(face = "bold")
-                        else element_blank()
-    )
+    theme(axis.text.x     = element_text(angle = 35, hjust = 1),
+          legend.position = "none")
+
+  if (show_title)
+    p <- p + ggtitle(ds) +
+      theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 14))
+  if (!show_ylab)
+    p <- p + theme(axis.text.y  = element_blank(),
+                   axis.ticks.y = element_blank())
+  p
 }
 
-p_nes  <- make_ctrl_swarm("NES \u2206",     "Delta NES",     show_strip = TRUE)
-p_jacc <- make_ctrl_swarm("Jaccard \u2206", "Delta Jaccard", show_strip = FALSE)
+# Row A: NES∆  — dataset titles shown, y-label on left panel only
+row_nes <- cowplot::plot_grid(
+  make_ds_panel("DrugMatrix",  "NES \u2206", show_title = TRUE,  show_ylab = TRUE),
+  make_ds_panel("Perturb-seq", "NES \u2206", show_title = TRUE,  show_ylab = FALSE),
+  make_ds_panel("SciPlex",     "NES \u2206", show_title = TRUE,  show_ylab = FALSE),
+  make_ds_panel("Tahoe",       "NES \u2206", show_title = TRUE,  show_ylab = FALSE),
+  nrow = 1, align = "hv", axis = "tb",
+  rel_widths = c(4, 5, 6, 6)   # proportional to method count
+)
 
-fig2 <- cowplot::plot_grid(p_nes, p_jacc, ncol = 1,
+# Row B: Jaccard∆ — no repeated titles, y-label updated
+make_ds_panel_jacc <- function(ds, show_ylab) {
+  methods <- ds_methods[[ds]]
+  dat <- ctrl_swarm_all %>%
+    dplyr::filter(dataset == ds, metric == "Jaccard \u2206") %>%
+    dplyr::mutate(method = factor(method, levels = methods))
+
+  p <- ggplot(dat, aes(x = method, y = value, fill = method)) +
+    geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+    ggbeeswarm::geom_quasirandom(width = 0.15, alpha = 0.15, size = 0.05,
+                                  groupOnX = TRUE) +
+    stat_summary(fun = median, geom = "point", shape = 21, size = 3,
+                 fill = "white") +
+    geom_hline(yintercept = 0, linetype = "dotted", color = "grey50",
+               linewidth = 0.8) +
+    scale_fill_manual(values = method_pal_fig2) +
+    scale_x_discrete(limits = methods) +
+    labs(x = "", y = if (show_ylab) "Delta Jaccard" else "") +
+    theme_classic(base_size = 15) +
+    theme(axis.text.x     = element_text(angle = 35, hjust = 1),
+          legend.position = "none")
+
+  if (!show_ylab)
+    p <- p + theme(axis.text.y  = element_blank(),
+                   axis.ticks.y = element_blank())
+  p
+}
+
+row_jacc <- cowplot::plot_grid(
+  make_ds_panel_jacc("DrugMatrix",  show_ylab = TRUE),
+  make_ds_panel_jacc("Perturb-seq", show_ylab = FALSE),
+  make_ds_panel_jacc("SciPlex",     show_ylab = FALSE),
+  make_ds_panel_jacc("Tahoe",       show_ylab = FALSE),
+  nrow = 1, align = "hv", axis = "tb",
+  rel_widths = c(4, 5, 6, 6)
+)
+
+fig2 <- cowplot::plot_grid(row_nes, row_jacc, ncol = 1,
                             labels = c("A", "B"), label_size = 14,
                             rel_heights = c(1.15, 1))
 fig2
@@ -3066,17 +3130,35 @@ build_regime_hm <- function(paired_p, paired_stat, regime_label) {
     dplyr::mutate(regime = regime_label)
 }
 
-fig3_df <- dplyr::bind_rows(
+fig3_df_raw <- dplyr::bind_rows(
   build_regime_hm(paired_10th, paired_stat_10th,
                   "Resource constrained (1/10)"),
   build_regime_hm(paired_90th, paired_stat_90th,
                   "Maximal information (9/10)")
-) %>%
+)
+
+# Fill in all method × dataset × metric × regime combinations so that cells
+# with no eval data (e.g. scGPT for DrugMatrix/SciPlex/Tahoe, Stack for
+# DrugMatrix) are explicitly represented with NA fill and "N/A" label.
+all_combos <- tidyr::expand_grid(
+  method  = factor(hm_method_levels, levels = hm_method_levels),
+  dataset = factor(dataset_levels,   levels = dataset_levels),
+  metric  = factor(c("NES","Jaccard"), levels = c("NES","Jaccard")),
+  regime  = c("Resource constrained (1/10)", "Maximal information (9/10)")
+)
+
+fig3_df <- all_combos %>%
+  dplyr::left_join(fig3_df_raw,
+                   by = c("method","dataset","metric","regime")) %>%
   dplyr::mutate(
-    regime = factor(regime,
-                    levels = c("Resource constrained (1/10)",
-                               "Maximal information (9/10)")),
-    rank_label = dplyr::if_else(!is.na(rank), as.character(rank), "")
+    regime     = factor(regime,
+                        levels = c("Resource constrained (1/10)",
+                                   "Maximal information (9/10)")),
+    rank_label = dplyr::case_when(
+      !is.na(rank)        ~ as.character(rank),
+      !is.na(neg_log10p)  ~ "",        # p present but rank absent (shouldn't occur)
+      TRUE                ~ "N/A"      # no eval data at all
+    )
   )
 
 fig3 <- ggplot(fig3_df, aes(x = dataset, y = method, fill = neg_log10p)) +
