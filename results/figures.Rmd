@@ -460,196 +460,6 @@ paired_90th
 paired_stat_90th
 ```
 
-# Paper Figures
-
-```{r paper-fig-setup, message=FALSE, warning=FALSE}
-# Shared helpers used across Figure 2 and Figure 3
-library(tidyr)
-library(cowplot)
-
-# Short display labels for methods (used in heatmaps; CSV tables use lowercase)
-method_order_csv <- c("mean", "project cor (eigen)", "project cor (gsva)",
-                      "network prop", "orthos", "scGPT", "stack")
-method_labels_hm <- c(
-  "mean"                = "Mean",
-  "project cor (eigen)" = "PC-Eigen",
-  "project cor (gsva)"  = "PC-GSVA",
-  "network prop"        = "NetProp",
-  "orthos"              = "Orthos",
-  "scGPT"               = "scGPT",
-  "stack"               = "Stack"
-)
-# Factor levels for heatmap y-axis: Mean at top, Stack at bottom
-hm_method_levels <- rev(method_labels_hm[method_order_csv])
-
-dataset_levels <- c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")
-
-recode_dataset <- function(x) {
-  dplyr::recode(x,
-    drugmatrix = "DrugMatrix", perturbseq = "Perturb-seq",
-    sciplex = "SciPlex", tahoe = "Tahoe"
-  )
-}
-
-# Reshape a wide paired-p table (from CSV) to long form with -log10(p) and
-# display labels applied
-paired_long <- function(df, regime) {
-  df %>%
-    tidyr::pivot_longer(-method, names_to = "col", values_to = "p") %>%
-    tidyr::separate(col, into = c("dataset", "metric"),
-                    sep = "_(?=[^_]+$)") %>%
-    dplyr::filter(!is.na(p)) %>%
-    dplyr::mutate(
-      regime      = regime,
-      neg_log10p  = pmin(-log10(pmax(p, 1e-30)), 30),
-      dataset     = factor(recode_dataset(dataset), levels = dataset_levels),
-      method      = dplyr::recode(method, !!!method_labels_hm),
-      method      = factor(method, levels = hm_method_levels)
-    )
-}
-```
-
-## Figure 2 — Control regime is a null baseline
-
-```{r paper-fig2, message=FALSE, warning=FALSE, fig.width=14, fig.height=8}
-# Load ctrl swarm data for all 4 datasets (both metrics)
-ctrl_swarm_all <- dplyr::bind_rows(
-  readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_paired_swarm_plot_df.rds")) %>%
-    dplyr::mutate(dataset = "DrugMatrix"),
-  readRDS(file.path(RESULTS_PATH, "perturb-seq/ctrl_paired_swarm_plot_df.rds")) %>%
-    dplyr::mutate(dataset = "Perturb-seq"),
-  readRDS(file.path(RESULTS_PATH, "sciplex/ctrl_paired_swarm_plot_df.rds")) %>%
-    dplyr::mutate(dataset = "SciPlex"),
-  readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_paired_swarm_plot_df.rds")) %>%
-    dplyr::mutate(dataset = "Tahoe")
-) %>%
-  dplyr::mutate(
-    dataset = factor(dataset, levels = dataset_levels),
-    method  = factor(method, levels = c("Mean", "NetworkProp", "ProjectCor (Eigen)",
-                                         "ProjectCor (GSVA)", "Orthos", "Stack"))
-  )
-
-swarm_xlabs <- c(
-  "Mean" = "Mean", "NetworkProp" = "Net\nProp",
-  "ProjectCor (Eigen)" = "PC\nEigen", "ProjectCor (GSVA)" = "PC\nGSVA",
-  "Orthos" = "Orthos", "Stack" = "Stack"
-)
-
-make_ctrl_swarm <- function(metric_name, y_label, show_strip = TRUE) {
-  ggplot(ctrl_swarm_all %>% dplyr::filter(metric == metric_name),
-         aes(x = method, y = value, color = method)) +
-    ggbeeswarm::geom_quasirandom(width = 0.2, alpha = 0.12, size = 0.04,
-                                  groupOnX = TRUE) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "grey30",
-               linewidth = 0.7) +
-    stat_summary(fun = median, geom = "crossbar", width = 0.5,
-                 linewidth = 0.5, color = "black") +
-    facet_wrap(~dataset, nrow = 1, scales = "free_y") +
-    scale_x_discrete(labels = swarm_xlabs) +
-    scale_color_brewer(palette = "Dark2") +
-    labs(x = NULL, y = y_label) +
-    theme_classic(base_size = 13) +
-    theme(
-      legend.position = "none",
-      strip.text      = if (show_strip) element_text(face = "bold")
-                        else element_blank(),
-      axis.text.x     = element_text(size = 9)
-    )
-}
-
-p_nes  <- make_ctrl_swarm("NES ∆",      "Delta NES",      show_strip = TRUE)
-p_jacc <- make_ctrl_swarm("Jaccard ∆",  "Delta Jaccard",  show_strip = FALSE)
-
-fig2 <- plot_grid(p_nes, p_jacc, ncol = 1,
-                  labels = c("A", "B"), label_size = 14,
-                  rel_heights = c(1.15, 1))
-fig2
-```
-```{r}
-ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig2_ctrl_null.pdf"),
-       fig2, width = 14, height = 8, device = cairo_pdf)
-```
-
-## Figure 3 — Information scaling and method landscape
-
-```{r paper-fig3, message=FALSE, warning=FALSE, fig.width=12, fig.height=9}
-# Each cell: fill = -log10(Fisher NES/Jacc meta-p); label = rank by median W
-# statistic within each dataset column. Rows = regime, columns = metric.
-# Shows: (1) which datasets respond to target data, (2) no single method wins.
-
-build_regime_hm <- function(paired_p, paired_stat, regime_label) {
-  # p-values → long with neg_log10p
-  p_long <- paired_p %>%
-    tidyr::pivot_longer(-method, names_to = "col", values_to = "p") %>%
-    tidyr::separate(col, into = c("dataset", "metric"), sep = "_(?=[^_]+$)") %>%
-    dplyr::filter(!is.na(p)) %>%
-    dplyr::mutate(
-      neg_log10p = pmin(-log10(pmax(p, 1e-30)), 30),
-      dataset    = factor(recode_dataset(dataset), levels = dataset_levels),
-      metric     = dplyr::recode(metric, NES = "NES", Jacc = "Jaccard"),
-      metric     = factor(metric, levels = c("NES", "Jaccard")),
-      method     = dplyr::recode(method, !!!method_labels_hm),
-      method     = factor(method, levels = hm_method_levels)
-    )
-
-  # W statistics → rank within each dataset × metric
-  rank_long <- paired_stat %>%
-    tidyr::pivot_longer(-method, names_to = "col", values_to = "W") %>%
-    tidyr::separate(col, into = c("dataset", "metric"), sep = "_(?=[^_]+$)") %>%
-    dplyr::filter(!is.na(W)) %>%
-    dplyr::mutate(
-      dataset = factor(recode_dataset(dataset), levels = dataset_levels),
-      metric  = dplyr::recode(metric, NES = "NES", Jacc = "Jaccard"),
-      metric  = factor(metric, levels = c("NES", "Jaccard")),
-      method  = dplyr::recode(method, !!!method_labels_hm),
-      method  = factor(method, levels = hm_method_levels)
-    ) %>%
-    dplyr::group_by(dataset, metric) %>%
-    dplyr::mutate(rank = rank(-W, ties.method = "min")) %>%
-    dplyr::ungroup() %>%
-    dplyr::select(method, dataset, metric, rank)
-
-  p_long %>%
-    dplyr::left_join(rank_long, by = c("method", "dataset", "metric")) %>%
-    dplyr::mutate(regime = regime_label)
-}
-
-fig3_df <- dplyr::bind_rows(
-  build_regime_hm(paired_10th, paired_stat_10th,
-                  "Resource constrained (1/10)"),
-  build_regime_hm(paired_90th, paired_stat_90th,
-                  "Maximal information (9/10)")
-) %>%
-  dplyr::mutate(
-    regime = factor(regime,
-                    levels = c("Resource constrained (1/10)",
-                               "Maximal information (9/10)")),
-    rank_label = dplyr::if_else(!is.na(rank), as.character(rank), "")
-  )
-
-fig3 <- ggplot(fig3_df, aes(x = dataset, y = method, fill = neg_log10p)) +
-  geom_tile(color = "white", linewidth = 0.5) +
-  geom_text(aes(label = rank_label), size = 5, fontface = "bold",
-            color = "grey15") +
-  facet_grid(regime ~ metric) +
-  scale_fill_distiller(palette = "YlGn", direction = 1,
-                       name = "-log₁₀(p)", limits = c(0, 30),
-                       na.value = "grey90") +
-  labs(x = NULL, y = NULL) +
-  theme_classic(base_size = 13) +
-  theme(
-    axis.text.x     = element_text(angle = 35, hjust = 1),
-    strip.text      = element_text(face = "bold", size = 12),
-    panel.grid      = element_blank(),
-    legend.position = "right"
-  )
-fig3
-```
-```{r}
-ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig3_method_landscape.pdf"),
-       fig3, width = 12, height = 9, device = cairo_pdf)
-```
-
 # Tahoe {.tabset}
 
 ## Control {.tabset}
@@ -3150,6 +2960,148 @@ ggsave(
   dpi = 400
 )
 ```
+
+# Paper Figures
+
+## Figure 2 — Control regime is a null baseline
+
+```{r paper-fig2, message=FALSE, warning=FALSE, fig.width=14, fig.height=9}
+# Load ctrl swarm data for all 4 datasets (both metrics combined)
+ctrl_swarm_all <- dplyr::bind_rows(
+  readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "DrugMatrix"),
+  readRDS(file.path(RESULTS_PATH, "perturb-seq/ctrl_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "Perturb-seq"),
+  readRDS(file.path(RESULTS_PATH, "sciplex/ctrl_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "SciPlex"),
+  readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "Tahoe")
+) %>%
+  dplyr::mutate(
+    dataset = factor(dataset, levels = dataset_levels),
+    method  = factor(method, levels = c("Mean", "NetworkProp", "ProjectCor (Eigen)",
+                                         "ProjectCor (GSVA)", "Orthos", "Stack"))
+  )
+
+# Mirror aesthetics used in per-dataset ctrl paired swarm sections:
+#   violin + quasirandom overlay, white median dot, Pastel1 fill, dotted zero line
+make_ctrl_swarm <- function(metric_name, y_label, show_strip = TRUE) {
+  ggplot(ctrl_swarm_all %>% dplyr::filter(metric == metric_name),
+         aes(x = method, y = value, fill = method)) +
+    geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+    ggbeeswarm::geom_quasirandom(width = 0.15, alpha = 0.15, size = 0.05,
+                                  groupOnX = TRUE) +
+    stat_summary(fun = median, geom = "point", shape = 21, size = 3,
+                 fill = "white") +
+    geom_hline(yintercept = 0, linetype = "dotted", color = "grey50",
+               linewidth = 0.8) +
+    facet_wrap(~dataset, nrow = 1, scales = "free_y") +
+    scale_fill_brewer(palette = "Pastel1") +
+    scale_x_discrete(limits = c("Mean", "NetworkProp", "ProjectCor (Eigen)",
+                                 "ProjectCor (GSVA)", "Orthos", "Stack")) +
+    labs(x = "", y = y_label) +
+    theme_classic(base_size = 15) +
+    theme(
+      axis.text.x     = element_text(angle = 35, hjust = 1),
+      legend.position = "none",
+      strip.text      = if (show_strip) element_text(face = "bold")
+                        else element_blank()
+    )
+}
+
+p_nes  <- make_ctrl_swarm("NES \u2206",     "Delta NES",     show_strip = TRUE)
+p_jacc <- make_ctrl_swarm("Jaccard \u2206", "Delta Jaccard", show_strip = FALSE)
+
+fig2 <- cowplot::plot_grid(p_nes, p_jacc, ncol = 1,
+                            labels = c("A", "B"), label_size = 14,
+                            rel_heights = c(1.15, 1))
+fig2
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig2_ctrl_null.pdf"),
+       fig2, width = 14, height = 9, device = cairo_pdf)
+```
+
+## Figure 3 — Information scaling and method landscape
+
+```{r paper-fig3, message=FALSE, warning=FALSE, fig.width=12, fig.height=9}
+# Each cell: fill = -log10(Fisher NES/Jacc meta-p); label = rank by median W
+# statistic within each dataset column. Rows = regime, columns = metric.
+# Shows: (1) which datasets respond to target data, (2) no single method wins.
+
+build_regime_hm <- function(paired_p, paired_stat, regime_label) {
+  # p-values → long with neg_log10p
+  p_long <- paired_p %>%
+    tidyr::pivot_longer(-method, names_to = "col", values_to = "p") %>%
+    tidyr::separate(col, into = c("dataset", "metric"), sep = "_(?=[^_]+$)") %>%
+    dplyr::filter(!is.na(p)) %>%
+    dplyr::mutate(
+      neg_log10p = pmin(-log10(pmax(p, 1e-30)), 30),
+      dataset    = factor(recode_dataset(dataset), levels = dataset_levels),
+      metric     = dplyr::recode(metric, NES = "NES", Jacc = "Jaccard"),
+      metric     = factor(metric, levels = c("NES", "Jaccard")),
+      method     = dplyr::recode(method, !!!method_labels_hm),
+      method     = factor(method, levels = hm_method_levels)
+    )
+
+  # W statistics → rank within each dataset × metric
+  rank_long <- paired_stat %>%
+    tidyr::pivot_longer(-method, names_to = "col", values_to = "W") %>%
+    tidyr::separate(col, into = c("dataset", "metric"), sep = "_(?=[^_]+$)") %>%
+    dplyr::filter(!is.na(W)) %>%
+    dplyr::mutate(
+      dataset = factor(recode_dataset(dataset), levels = dataset_levels),
+      metric  = dplyr::recode(metric, NES = "NES", Jacc = "Jaccard"),
+      metric  = factor(metric, levels = c("NES", "Jaccard")),
+      method  = dplyr::recode(method, !!!method_labels_hm),
+      method  = factor(method, levels = hm_method_levels)
+    ) %>%
+    dplyr::group_by(dataset, metric) %>%
+    dplyr::mutate(rank = rank(-W, ties.method = "min")) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(method, dataset, metric, rank)
+
+  p_long %>%
+    dplyr::left_join(rank_long, by = c("method", "dataset", "metric")) %>%
+    dplyr::mutate(regime = regime_label)
+}
+
+fig3_df <- dplyr::bind_rows(
+  build_regime_hm(paired_10th, paired_stat_10th,
+                  "Resource constrained (1/10)"),
+  build_regime_hm(paired_90th, paired_stat_90th,
+                  "Maximal information (9/10)")
+) %>%
+  dplyr::mutate(
+    regime = factor(regime,
+                    levels = c("Resource constrained (1/10)",
+                               "Maximal information (9/10)")),
+    rank_label = dplyr::if_else(!is.na(rank), as.character(rank), "")
+  )
+
+fig3 <- ggplot(fig3_df, aes(x = dataset, y = method, fill = neg_log10p)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  geom_text(aes(label = rank_label), size = 5, fontface = "bold",
+            color = "grey15") +
+  facet_grid(regime ~ metric) +
+  scale_fill_distiller(palette = "YlGn", direction = 1,
+                       name = "-log₁₀(p)", limits = c(0, 30),
+                       na.value = "grey90") +
+  labs(x = NULL, y = NULL) +
+  theme_classic(base_size = 13) +
+  theme(
+    axis.text.x     = element_text(angle = 35, hjust = 1),
+    strip.text      = element_text(face = "bold", size = 12),
+    panel.grid      = element_blank(),
+    legend.position = "right"
+  )
+fig3
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig3_method_landscape.pdf"),
+       fig3, width = 12, height = 9, device = cairo_pdf)
+```
+
 
 # TI Distributions
 
