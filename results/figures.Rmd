@@ -2471,9 +2471,16 @@ format_moa_axis_label <- function(x) {
   str_wrap(paste0(x, " (", n_drugs, ")"), width = 28)
 }
 
-ggplot(
+p_moa_delta <- ggplot(
   tahoe_moa_delta_df %>%
-    mutate(moa_fine_label = factor(moa_fine_label, levels = moa_levels)),
+    mutate(
+      moa_fine_label = factor(moa_fine_label, levels = moa_levels),
+      method = dplyr::recode(as.character(method),
+        "NetworkProp"        = "NetProp",
+        "ProjectCor (Eigen)" = "projCor-Eigen",
+        "ProjectCor (GSVA)"  = "projCor-GSVA"
+      )
+    ),
   aes(x = delta_NES, y = moa_fine_label)
 ) +
   geom_vline(xintercept = 0, color = "grey70", linewidth = 0.35) +
@@ -2504,26 +2511,29 @@ ggplot(
     y = NULL,
     color = "Method"
   ) +
-  theme_bw(base_size = 18) +
+  theme_bw(base_size = 9) +
   theme(
     panel.grid.minor = element_blank(),
     axis.title.y = element_blank(),
     strip.placement = "outside",
     strip.background.y = element_blank(),
-    strip.text.y.left = element_text(size = 18, face = "bold", angle = 0),
+    strip.text.y.left = element_text(face = "bold", angle = 0),
     legend.position = "right",
-    legend.text = element_text(size = 15),  
-    legend.title = element_text(size = 18),
-    axis.text = element_text(size = 18),
-    strip.text = element_text(size = 18)
   )
 ```
 
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig4_tahoe_moa.pdf"),
+<<<<<<< Updated upstream
        width = 14,
        height = 10,
        dpi = 400, 
+=======
+       p_moa_delta,
+       width = 8,
+       height = 5.17,
+       dpi = 400,
+>>>>>>> Stashed changes
        device = "pdf")
 ```
 
@@ -2718,6 +2728,146 @@ ggsave(
   file.path(PROJECT_PATH, "results/plots/tahoe_moa_gain_lineplot_relative_to_ctrl.png"),
   width = 14, height = 10, dpi = 300
 )
+```
+
+## Combined Delta NES + Gain Heatmap
+
+```{r tahoe-moa-combined, message=FALSE, warning=FALSE, fig.width=14, fig.height=20}
+# Fixed method column order matching the delta NES plot legend
+method_order_hm <- c("Mean", "NetProp", "projCor-Eigen", "projCor-GSVA", "Stack")
+
+# Row order top-to-bottom in heatmap = rev(moa_levels), so that
+# top of heatmap aligns with top facet (Inhibitor) of the ggplot above.
+row_order_hm <- rev(moa_levels)
+
+# Lookup for row split: moa_fine_label -> moa_broad_group
+moa_to_broad <- tahoe_moa_gain_df %>%
+  dplyr::distinct(moa_fine_label, moa_broad_group) %>%
+  tibble::deframe()
+
+row_split_hm <- factor(
+  as.character(moa_to_broad[row_order_hm]),
+  levels = c("Inhibitor/\nAntagonist", "Activator/\nAgonist")  # top slice first
+)
+
+# Build gain matrices (rows = MOA in heatmap order, cols = methods in fixed order)
+make_gain_mat <- function(comp) {
+  tahoe_moa_gain_df %>%
+    dplyr::filter(comparison == comp) %>%
+    dplyr::select(moa_fine_label, method, median_gain) %>%
+    dplyr::mutate(moa_fine_label = as.character(moa_fine_label),
+                  method = as.character(method)) %>%
+    tidyr::pivot_wider(names_from = method, values_from = median_gain) %>%
+    tibble::column_to_rownames("moa_fine_label") %>%
+    .[row_order_hm, method_order_hm] %>%
+    as.matrix()
+}
+
+gain_mat_10th <- make_gain_mat("gain_10th")
+gain_mat_90th <- make_gain_mat("gain_90th")
+
+# Shared symmetric color scale across both regimes
+max_abs <- max(abs(c(gain_mat_10th, gain_mat_90th)), na.rm = TRUE)
+gain_col <- circlize::colorRamp2(c(-max_abs, 0, max_abs),
+                                  c("#3b4cc0", "white", "#b40426"))
+
+common_hm_args <- list(
+  col            = gain_col,
+  na_col         = "grey90",
+  cluster_rows   = FALSE,
+  cluster_columns = FALSE,
+  show_row_dend  = FALSE,
+  show_column_dend = FALSE,
+  cluster_row_slices = FALSE,
+  row_split      = row_split_hm,
+  row_gap        = unit(5, "mm"),
+  row_names_side = "right",
+  row_names_gp   = gpar(fontsize = 14),
+  column_names_rot = 45,
+  column_names_gp  = gpar(fontsize = 14),
+  column_title_gp  = gpar(fontsize = 15, fontface = "bold"),
+  row_title_side   = "left",
+  row_title_rot    = 0,
+  row_title_gp     = gpar(fontsize = 14, fontface = "bold"),
+  cell_fun = function(j, i, x, y, width, height, fill) {
+    value <- gain_mat_10th[i, j]   # placeholder; overridden per heatmap below
+    if (is.finite(value))
+      grid::grid.text(sprintf("%.2f", value), x, y, gp = grid::gpar(fontsize = 11))
+  },
+  heatmap_legend_param = list(
+    title      = "Median\nGain",
+    title_gp   = gpar(fontsize = 14, fontface = "bold"),
+    labels_gp  = gpar(fontsize = 13)
+  )
+)
+
+ht_10th_combined <- Heatmap(
+  gain_mat_10th,
+  name           = "Median\nGain",
+  column_title   = "10th - Control",
+  cell_fun       = function(j, i, x, y, width, height, fill) {
+    v <- gain_mat_10th[i, j]
+    if (is.finite(v))
+      grid::grid.text(sprintf("%.2f", v), x, y, gp = grid::gpar(fontsize = 8))
+  },
+  col              = gain_col,
+  na_col           = "grey90",
+  cluster_rows     = FALSE,
+  cluster_columns  = FALSE,
+  show_row_dend    = FALSE,
+  show_column_dend = FALSE,
+  cluster_row_slices = FALSE,
+  row_split        = row_split_hm,
+  row_gap          = unit(5, "mm"),
+  row_names_side   = "right",
+  row_names_gp     = gpar(fontsize = 11),
+  column_names_rot = 45,
+  column_names_gp  = gpar(fontsize = 11),
+  column_title_gp  = gpar(fontsize = 12, fontface = "bold"),
+  row_title_side   = "left",
+  row_title_rot    = 0,
+  row_title_gp     = gpar(fontsize = 11, fontface = "bold"),
+  heatmap_legend_param = list(
+    title    = "Median\nGain",
+    title_gp = gpar(fontsize = 11, fontface = "bold"),
+    labels_gp = gpar(fontsize = 10)
+  )
+)
+
+ht_90th_combined <- Heatmap(
+  gain_mat_90th,
+  name           = "Median\nGain_90th",
+  column_title   = "90th - Control",
+  show_heatmap_legend = FALSE,
+  cell_fun       = function(j, i, x, y, width, height, fill) {
+    v <- gain_mat_90th[i, j]
+    if (is.finite(v))
+      grid::grid.text(sprintf("%.2f", v), x, y, gp = grid::gpar(fontsize = 8))
+  },
+  col              = gain_col,
+  na_col           = "grey90",
+  cluster_rows     = FALSE,
+  cluster_columns  = FALSE,
+  show_row_dend    = FALSE,
+  show_column_dend = FALSE,
+  cluster_row_slices = FALSE,
+  row_names_side   = "right",
+  row_names_gp     = gpar(fontsize = 11),
+  column_names_rot = 45,
+  column_names_gp  = gpar(fontsize = 11),
+  column_title_gp  = gpar(fontsize = 12, fontface = "bold")
+)
+
+ht_combined <- ht_10th_combined + ht_90th_combined
+
+ComplexHeatmap::draw(ht_combined, merge_legend = TRUE)
+```
+
+```{r}
+pdf(file.path(PROJECT_PATH, "results/plots/tahoe_moa_gain_combined.pdf"),
+    width = 8, height = 8)
+ComplexHeatmap::draw(ht_combined, merge_legend = TRUE)
+dev.off()
 ```
 
 ## TI Quadrant Scatter
@@ -2985,8 +3135,8 @@ recode_dataset <- function(x) {
 # Method label mapping: CSV name -> display label (for Figure 3 heatmap)
 method_labels_hm <- c(
   "mean"               = "Mean",
-  "project cor (eigen)"= "PC-Eigen",
-  "project cor (gsva)" = "PC-GSVA",
+  "project cor (eigen)"= "projCor-Eigen",
+  "project cor (gsva)" = "projCor-GSVA",
   "network prop"       = "NetProp",
   "orthos"             = "Orthos",
   "scGPT"              = "scGPT",
@@ -2995,7 +3145,7 @@ method_labels_hm <- c(
 
 # Display order for heatmap y-axis (Mean at top, Stack at bottom)
 method_order_csv  <- c("mean", "project cor (eigen)", "project cor (gsva)",
-                        "network prop", "orthos", "scGPT", "stack")
+                        "network prop", "scGPT", "stack")
 hm_method_levels  <- rev(unname(method_labels_hm[method_order_csv]))
 ```
 
@@ -3015,21 +3165,27 @@ ctrl_swarm_all <- dplyr::bind_rows(
   readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_paired_swarm_plot_df.rds")) %>%
     dplyr::mutate(dataset = "Tahoe")
 ) %>%
-  dplyr::mutate(dataset = factor(dataset, levels = dataset_levels))
+  dplyr::mutate(
+    dataset = factor(dataset, levels = dataset_levels),
+    method  = dplyr::recode(method,
+      "NetworkProp"        = "NetProp",
+      "ProjectCor (Eigen)" = "projCor-Eigen",
+      "ProjectCor (GSVA)"  = "projCor-GSVA"
+    )
+  )
 
 # Fixed Pastel1 colors keyed by method name for consistency across panels
 method_pal_fig2 <- setNames(
   RColorBrewer::brewer.pal(6, "Pastel1"),
-  c("Mean", "NetworkProp", "ProjectCor (Eigen)",
-    "ProjectCor (GSVA)", "Orthos", "Stack")
+  c("Mean", "NetProp", "projCor-Eigen", "projCor-GSVA", "Orthos", "Stack")
 )
 
 # Methods available per dataset (in desired x-axis order)
 ds_methods <- list(
-  "DrugMatrix"  = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Orthos"),
-  "Perturb-seq" = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Stack"),
-  "SciPlex"     = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Orthos", "Stack"),
-  "Tahoe"       = c("Mean", "NetworkProp", "ProjectCor (Eigen)", "ProjectCor (GSVA)", "Orthos", "Stack")
+  "DrugMatrix"  = c("Mean", "NetProp", "projCor-Eigen", "projCor-GSVA", "Orthos"),
+  "Perturb-seq" = c("Mean", "NetProp", "projCor-Eigen", "projCor-GSVA", "Stack"),
+  "SciPlex"     = c("Mean", "NetProp", "projCor-Eigen", "projCor-GSVA", "Orthos", "Stack"),
+  "Tahoe"       = c("Mean", "NetProp", "projCor-Eigen", "projCor-GSVA", "Orthos", "Stack")
 )
 
 # One panel per dataset, one row per metric
@@ -3044,7 +3200,7 @@ make_ds_panel <- function(ds, metric_name,
     geom_violin(width = 0.9, alpha = 0.35, color = NA) +
     ggbeeswarm::geom_quasirandom(width = 0.15, alpha = 0.15, size = 0.05,
                                   groupOnX = TRUE) +
-    stat_summary(fun = median, geom = "point", shape = 21, size = 3,
+    stat_summary(fun = median, geom = "point", shape = 21, size = 1,
                  fill = "white") +
     geom_hline(yintercept = 0, linetype = "dotted", color = "grey50",
                linewidth = 0.8) +
@@ -3052,13 +3208,13 @@ make_ds_panel <- function(ds, metric_name,
     scale_x_discrete(limits = methods) +
     labs(x = "",
          y = if (show_ylab) "Delta NES" else "") +
-    theme_classic(base_size = 15) +
+    theme_classic(base_size = 9) +
     theme(axis.text.x     = element_text(angle = 35, hjust = 1),
           legend.position = "none")
 
   if (show_title)
     p <- p + ggtitle(ds) +
-      theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 14))
+      theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 11))
   if (!show_ylab)
     p <- p + theme(axis.text.y  = element_blank(),
                    axis.ticks.y = element_blank())
@@ -3086,14 +3242,14 @@ make_ds_panel_jacc <- function(ds, show_ylab) {
     geom_violin(width = 0.9, alpha = 0.35, color = NA) +
     ggbeeswarm::geom_quasirandom(width = 0.15, alpha = 0.15, size = 0.05,
                                   groupOnX = TRUE) +
-    stat_summary(fun = median, geom = "point", shape = 21, size = 3,
+    stat_summary(fun = median, geom = "point", shape = 21, size = 1,
                  fill = "white") +
     geom_hline(yintercept = 0, linetype = "dotted", color = "grey50",
                linewidth = 0.8) +
     scale_fill_manual(values = method_pal_fig2) +
     scale_x_discrete(limits = methods) +
     labs(x = "", y = if (show_ylab) "Delta Jaccard" else "") +
-    theme_classic(base_size = 15) +
+    theme_classic(base_size = 9) +
     theme(axis.text.x     = element_text(angle = 35, hjust = 1),
           legend.position = "none")
 
@@ -3113,13 +3269,13 @@ row_jacc <- cowplot::plot_grid(
 )
 
 fig2 <- cowplot::plot_grid(row_nes, row_jacc, ncol = 1,
-                            labels = c("A", "B"), label_size = 14,
+                            labels = c("A", "B"), label_size = 11,
                             rel_heights = c(1.15, 1))
 fig2
 ```
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig2_ctrl_null.pdf"),
-       fig2, width = 14, height = 9, device = cairo_pdf)
+       fig2, width = 8, height = 5.14, dpi = 400, device = cairo_pdf)
 ```
 
 ## Figure 3: Information scaling and method landscape
@@ -3199,25 +3355,121 @@ fig3_df <- all_combos %>%
 
 fig3 <- ggplot(fig3_df, aes(x = dataset, y = method, fill = neg_log10p)) +
   geom_tile(color = "white", linewidth = 0.5) +
-  geom_text(aes(label = rank_label), size = 5, fontface = "bold",
+  geom_text(aes(label = rank_label), size = 2, fontface = "bold",
             color = "grey15") +
   facet_grid(regime ~ metric) +
   scale_fill_distiller(palette = "GnBu", direction = 1,
                        name = "-log₁₀(p)", limits = c(0, 30),
                        na.value = "grey90") +
   labs(x = NULL, y = NULL) +
-  theme_classic(base_size = 13) +
+  theme_classic(base_size = 9) +
   theme(
     axis.text.x     = element_text(angle = 35, hjust = 1),
-    strip.text      = element_text(face = "bold", size = 12),
+    strip.text      = element_text(face = "bold", size = 9),
     panel.grid      = element_blank(),
     legend.position = "right"
   )
 fig3
 ```
+
+```{r paper-fig3c, message=FALSE, warning=FALSE}
+# Panel B: predicted vs source scatter for best method per dataset (90th regime).
+# Points are colored by target context only (legend title = "Target").
+# Target label derivation:
+#   DrugMatrix  — target column is already a single context name ("liver"/"kidney")
+#   Perturb-seq — target column is placeholder; parse target from source ("k562_rpe1" → "RPE1")
+#   SciPlex     — same parsing as Perturb-seq
+#   Tahoe       — target column already nicely formatted (cell line names)
+
+qual_pal_paired <- RColorBrewer::brewer.pal(9, "Set1")
+
+# Extract target label from compound source string ("k562_rpe1" → "RPE1")
+fmt_target_from_source <- function(source) {
+  toupper(sapply(strsplit(source, "_"), `[[`, 2))
+}
+
+# Per-dataset specs for NES version (best by W statistic)
+best_90th_NES <- list(
+  list(title = "DrugMatrix (Best Method: Mean)",
+       file  = "drugmatrix/ctrl_90th_mean_eval_table.rds",
+       tgt_fn = function(df) tools::toTitleCase(df$target)),
+  list(title = "Perturb-seq (Best Method: NetProp)",
+       file  = "perturb-seq/ctrl_90th_networkprop_eval_table.rds",
+       tgt_fn = function(df) fmt_target_from_source(df$source)),
+  list(title = "SciPlex (Best Method: projCor-GSVA)",
+       file  = "sciplex/90th_projectcor_gsva_eval_table.rds",
+       tgt_fn = function(df) fmt_target_from_source(df$source)),
+  list(title = "Tahoe (Best Method: NetProp)",
+       file  = "tahoe/network_prop_90th_eval_table.rds",
+       tgt_fn = function(df) df$target)
+)
+
+# Per-dataset specs for Jaccard version (projCor-GSVA best for PS and SC)
+best_90th_Jacc <- list(
+  list(title  = "DrugMatrix (Best Method: Mean)",
+       file   = "drugmatrix/ctrl_90th_mean_eval_table.rds",
+       tgt_fn = function(df) tools::toTitleCase(df$target)),
+  list(title  = "Perturb-seq (Best Method: projCor-GSVA)",
+       file   = "perturb-seq/90th_projectcor_gsva_eval_table.rds",
+       tgt_fn = function(df) fmt_target_from_source(df$source)),
+  list(title  = "SciPlex (Best Method: projCor-GSVA)",
+       file   = "sciplex/90th_projectcor_gsva_eval_table.rds",
+       tgt_fn = function(df) fmt_target_from_source(df$source)),
+  list(title  = "Tahoe (Best Method: NetProp)",
+       file   = "tahoe/network_prop_90th_eval_table.rds",
+       tgt_fn = function(df) df$target)
+)
+
+make_scatter <- function(item, x_col, y_col, xlab, ylab) {
+  df <- readRDS(file.path(RESULTS_PATH, item$file)) %>%
+    dplyr::filter(!is.na(.data[[y_col]]), !is.na(.data[[x_col]]),
+                  is.finite(.data[[y_col]]), is.finite(.data[[x_col]])) %>%
+    dplyr::mutate(target_ctx = item$tgt_fn(.))
+  lims   <- range(c(df[[x_col]], df[[y_col]]))
+  pad    <- diff(lims) * 0.03
+  lims_p <- c(lims[1] - pad, lims[2] + pad)
+  ggplot(df, aes(x = .data[[x_col]], y = .data[[y_col]], color = target_ctx)) +
+    geom_point(alpha = 0.5, size = 0.8) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dotted",
+                color = "grey40", linewidth = 0.7) +
+    scale_color_manual(values = qual_pal_paired, name = "Target") +
+    scale_x_continuous(limits = lims_p) +
+    scale_y_continuous(limits = lims_p) +
+    labs(title = item$title, x = xlab, y = ylab) +
+    theme_classic(base_size = 9) +
+    theme(plot.title      = element_text(face = "bold", hjust = 0.5, size = 8),
+          legend.position  = "right",
+          legend.title     = element_text(size = 10),
+          legend.text      = element_text(size = 7),
+          legend.key.size  = unit(0.5, "lines"),
+          aspect.ratio     = 1)
+}
+
+build_panel_b <- function(best_list, x_col, y_col, xlab, ylab) {
+  plots <- lapply(best_list, make_scatter,
+                  x_col = x_col, y_col = y_col, xlab = xlab, ylab = ylab)
+  cowplot::plot_grid(plots[[1]], plots[[2]], plots[[3]], plots[[4]], nrow = 2)
+}
+
+panel_b_NES  <- build_panel_b(best_90th_NES,  "NES_FALSE",  "NES_TRUE",
+                               "NES (source)", "NES (predicted)")
+panel_b_Jacc <- build_panel_b(best_90th_Jacc, "jacc_FALSE", "jacc_TRUE",
+                               "Jaccard (source)", "Jaccard (predicted)")
+
+fig3_NES  <- cowplot::plot_grid(fig3, panel_b_NES,
+                                 ncol = 1, labels = c("A", "B"), label_size = 11,
+                                 rel_heights = c(1, 1))
+fig3_Jacc <- cowplot::plot_grid(fig3, panel_b_Jacc,
+                                 ncol = 1, labels = c("A", "B"), label_size = 11,
+                                 rel_heights = c(1, 1))
+fig3_NES
+```
+
 ```{r}
-ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig3_method_landscape.pdf"),
-       fig3, width = 12, height = 9, device = cairo_pdf)
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig3_NES.pdf"),
+       fig3_NES,  width = 8, height = 11, dpi = 400, device = cairo_pdf)
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig3_Jacc.pdf"),
+       fig3_Jacc, width = 8, height = 11, dpi = 400, device = cairo_pdf)
 ```
 
 
@@ -3279,7 +3531,7 @@ p_ccdf <- ggplot(ti_ccdf_df %>% filter(TI > 0),
   # scale_x_log10(name = "TI") +
   scale_y_log10(name = "Fraction with TI > x", labels = scales::percent) +
   scale_color_brewer(palette = "Paired", name = "Dataset") +
-  theme_classic(base_size = 15) +
+  theme_classic(base_size = 9) +
   theme(legend.position          = c(0.98, 0.98),
         legend.justification     = c("right", "top"),
         legend.background        = element_rect(fill = alpha("white", 0.7), colour = NA),
@@ -3315,7 +3567,7 @@ p_bar <- ggplot(ti_cat_summary, aes(x = dataset, y = prop, fill = ti_cat)) +
   scale_y_continuous(name = "Fraction of perturbations", labels = scales::percent) +
   scale_fill_brewer(palette = "Paired", name = "TI category") +
   labs(x = "") +
-  theme_classic(base_size = 15) +
+  theme_classic(base_size = 9) +
   theme(axis.text.x = element_text(angle = 35, hjust = 1),
         legend.position = "right")
 p_bar
@@ -3325,7 +3577,7 @@ ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_categories.png"),
        width = 7, height = 5, dpi = 400)
 ```
 
-## Figure 6: TI × Delta NES (90th regime, best method per dataset)
+## Figure 5: TI × Delta NES (90th regime, best method per dataset)
 
 ```{r ti-delta-nes, message=FALSE, warning=FALSE}
 # Best method per dataset by median NES Wilcoxon W statistic in the 90th regime:
@@ -3441,23 +3693,35 @@ ti_signif_df <- ti_signif_df %>%
   mutate(y_position = y_max + row_number() * y_range * 0.13) %>%
   ungroup()
 
+ti_cat_levels_ordered <- c("Low [0–0.1)", "Medium [0.1–0.5)", "High (≥0.5)")
+signif_annot <- ti_signif_df %>%
+  mutate(
+    x1   = match(xmin, ti_cat_levels_ordered),
+    x2   = match(xmax, ti_cat_levels_ordered),
+    xmid = (x1 + x2) / 2,
+    tip  = y_range * 0.025
+  )
+
 p_delta <- ggplot(ti_delta_joined, aes(x = ti_cat, y = delta_NES, fill = ti_cat)) +
   geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.3, linewidth = 0.5) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey40", linewidth = 0.7) +
-  ggsignif::geom_signif(
-    data        = ti_signif_df,
-    aes(xmin = xmin, xmax = xmax,
-        annotations = annotations, y_position = y_position),
-    manual      = TRUE,
-    inherit.aes = FALSE,
-    tip_length  = 0.01,
-    textsize    = 3.5
-  ) +
+  geom_segment(data = signif_annot,
+    aes(x = x1, xend = x2, y = y_position, yend = y_position),
+    inherit.aes = FALSE, linewidth = 0.4) +
+  geom_segment(data = signif_annot,
+    aes(x = x1, xend = x1, y = y_position - tip, yend = y_position),
+    inherit.aes = FALSE, linewidth = 0.4) +
+  geom_segment(data = signif_annot,
+    aes(x = x2, xend = x2, y = y_position - tip, yend = y_position),
+    inherit.aes = FALSE, linewidth = 0.4) +
+  geom_text(data = signif_annot,
+    aes(x = xmid, y = y_position, label = annotations),
+    inherit.aes = FALSE, size = 3.5, vjust = 0) +
   facet_wrap(~dataset, scales = "free_y", ncol = 2) +
   scale_fill_brewer(palette = "Paired") +
   scale_y_continuous(expand = expansion(mult = c(0.05, 0.2))) +
   labs(x = "TI category", y = "Delta NES (predicted − source)") +
-  theme_classic(base_size = 14) +
+  theme_classic(base_size = 9) +
   theme(
     axis.text.x   = element_text(angle = 35, hjust = 1),
     legend.position = "none",
@@ -3475,13 +3739,17 @@ ggsave(file.path(PROJECT_PATH, "results/plots/ti_delta_nes_by_category.png"),
 # Row 1: CCDF (left) + stacked bar chart (right)
 # Row 2: Delta NES × TI boxplot (full width)
 top_row   <- cowplot::plot_grid(p_ccdf, p_bar, nrow = 1, labels = c("A", "B"),
-                                label_size = 14, rel_widths = c(1, 0.8))
+                                label_size = 11, rel_widths = c(1, 0.8))
 panel_fig <- cowplot::plot_grid(top_row, p_delta, ncol = 1, labels = c("", "C"),
-                                label_size = 14, rel_heights = c(1, 1.2))
+                                label_size = 11, rel_heights = c(1, 1.2))
 panel_fig
 ```
 
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig5_combined_panel.pdf"),
+<<<<<<< Updated upstream
        panel_fig, width = 14, height = 12, device = "pdf")
+=======
+       panel_fig, width = 8, height = 8, dpi = 400, device = "pdf")
+>>>>>>> Stashed changes
 ```
