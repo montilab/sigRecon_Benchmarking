@@ -3456,20 +3456,17 @@ panel_b_NES  <- build_panel_b(best_90th_NES,  "NES_FALSE",  "NES_TRUE",
 panel_b_Jacc <- build_panel_b(best_90th_Jacc, "jacc_FALSE", "jacc_TRUE",
                                "Jaccard (source)", "Jaccard (predicted)")
 
-fig3_NES  <- cowplot::plot_grid(fig3, panel_b_NES,
-                                 ncol = 1, labels = c("A", "B"), label_size = 11,
-                                 rel_heights = c(1, 1))
-fig3_Jacc <- cowplot::plot_grid(fig3, panel_b_Jacc,
-                                 ncol = 1, labels = c("A", "B"), label_size = 11,
-                                 rel_heights = c(1, 1))
+fig3_NES <- cowplot::plot_grid(fig3, panel_b_NES,
+                                ncol = 1, labels = c("A", "B"), label_size = 11,
+                                rel_heights = c(1, 1))
 fig3_NES
 ```
 
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig3_NES.pdf"),
-       fig3_NES,  width = 8, height = 11, dpi = 400, device = cairo_pdf)
+       fig3_NES,    width = 8, height = 11, dpi = 400, device = cairo_pdf)
 ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig3_Jacc.pdf"),
-       fig3_Jacc, width = 8, height = 11, dpi = 400, device = cairo_pdf)
+       panel_b_Jacc, width = 7, height = 7,  dpi = 400, device = cairo_pdf)
 ```
 
 
@@ -3747,9 +3744,5 @@ panel_fig
 
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig5_combined_panel.pdf"),
-<<<<<<< Updated upstream
-       panel_fig, width = 14, height = 12, device = "pdf")
-=======
        panel_fig, width = 8, height = 8, dpi = 400, device = "pdf")
->>>>>>> Stashed changes
 ```
