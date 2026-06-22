@@ -2524,16 +2524,10 @@ p_moa_delta <- ggplot(
 
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig4_tahoe_moa.pdf"),
-<<<<<<< Updated upstream
-       width = 14,
-       height = 10,
-       dpi = 400, 
-=======
        p_moa_delta,
        width = 8,
        height = 5.17,
        dpi = 400,
->>>>>>> Stashed changes
        device = "pdf")
 ```
 
@@ -3350,13 +3344,14 @@ fig3_df <- all_combos %>%
       !is.na(rank)        ~ as.character(rank),
       !is.na(neg_log10p)  ~ "",        # p present but rank absent (shouldn't occur)
       TRUE                ~ "N/A"      # no eval data at all
-    )
+    ),
+    label_color = ifelse(!is.na(rank) & rank == 1, "red1", "gray15")
   )
 
 fig3 <- ggplot(fig3_df, aes(x = dataset, y = method, fill = neg_log10p)) +
   geom_tile(color = "white", linewidth = 0.5) +
-  geom_text(aes(label = rank_label), size = 2, fontface = "bold",
-            color = "grey15") +
+  geom_text(aes(label = rank_label, color = label_color), size = 4, fontface = "bold") +
+  scale_color_identity() +
   facet_grid(regime ~ metric) +
   scale_fill_distiller(palette = "GnBu", direction = 1,
                        name = "-log₁₀(p)", limits = c(0, 30),
@@ -3390,18 +3385,22 @@ fmt_target_from_source <- function(source) {
 
 # Per-dataset specs for NES version (best by W statistic)
 best_90th_NES <- list(
-  list(title = "DrugMatrix (Best Method: Mean)",
-       file  = "drugmatrix/ctrl_90th_mean_eval_table.rds",
-       tgt_fn = function(df) tools::toTitleCase(df$target)),
-  list(title = "Perturb-seq (Best Method: NetProp)",
-       file  = "perturb-seq/ctrl_90th_networkprop_eval_table.rds",
-       tgt_fn = function(df) fmt_target_from_source(df$source)),
-  list(title = "SciPlex (Best Method: projCor-GSVA)",
-       file  = "sciplex/90th_projectcor_gsva_eval_table.rds",
-       tgt_fn = function(df) fmt_target_from_source(df$source)),
-  list(title = "Tahoe (Best Method: NetProp)",
-       file  = "tahoe/network_prop_90th_eval_table.rds",
-       tgt_fn = function(df) df$target)
+  list(title    = "DrugMatrix (Best Method: Mean)",
+       file     = "drugmatrix/ctrl_90th_mean_eval_table.rds",
+       tgt_fn   = function(df) tools::toTitleCase(df$target),
+       p_method = "mean",               p_col = "drugmatrix_NES"),
+  list(title    = "Perturb-seq (Best Method: NetProp)",
+       file     = "perturb-seq/ctrl_90th_networkprop_eval_table.rds",
+       tgt_fn   = function(df) fmt_target_from_source(df$source),
+       p_method = "network prop",       p_col = "perturbseq_NES"),
+  list(title    = "SciPlex (Best Method: projCor-GSVA)",
+       file     = "sciplex/90th_projectcor_gsva_eval_table.rds",
+       tgt_fn   = function(df) fmt_target_from_source(df$source),
+       p_method = "project cor (gsva)", p_col = "sciplex_NES"),
+  list(title    = "Tahoe (Best Method: NetProp)",
+       file     = "tahoe/network_prop_90th_eval_table.rds",
+       tgt_fn   = function(df) df$target,
+       p_method = "network prop",       p_col = "tahoe_NES")
 )
 
 # Per-dataset specs for Jaccard version (projCor-GSVA best for PS and SC)
@@ -3428,6 +3427,16 @@ make_scatter <- function(item, x_col, y_col, xlab, ylab) {
   lims   <- range(c(df[[x_col]], df[[y_col]]))
   pad    <- diff(lims) * 0.03
   lims_p <- c(lims[1] - pad, lims[2] + pad)
+
+  subtitle <- if (!is.null(item$p_method)) {
+    p_val <- paired_90th %>% dplyr::filter(method == item$p_method) %>% dplyr::pull(item$p_col)
+    if (is.na(p_val) || p_val >= 0.05) {
+      "Wilcox meta p-value: NS"
+    } else {
+      paste0("Wilcox meta p-value: ", formatC(p_val, format = "e", digits = 2))
+    }
+  } else NULL
+
   ggplot(df, aes(x = .data[[x_col]], y = .data[[y_col]], color = target_ctx)) +
     geom_point(alpha = 0.5, size = 0.8) +
     geom_abline(slope = 1, intercept = 0, linetype = "dotted",
@@ -3435,9 +3444,10 @@ make_scatter <- function(item, x_col, y_col, xlab, ylab) {
     scale_color_manual(values = qual_pal_paired, name = "Target") +
     scale_x_continuous(limits = lims_p) +
     scale_y_continuous(limits = lims_p) +
-    labs(title = item$title, x = xlab, y = ylab) +
+    labs(title = item$title, subtitle = subtitle, x = xlab, y = ylab) +
     theme_classic(base_size = 9) +
     theme(plot.title      = element_text(face = "bold", hjust = 0.5, size = 8),
+          plot.subtitle   = element_text(hjust = 0.5, size = 7, color = "gray30"),
           legend.position  = "right",
           legend.title     = element_text(size = 10),
           legend.text      = element_text(size = 7),
@@ -3745,4 +3755,189 @@ panel_fig
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig5_combined_panel.pdf"),
        panel_fig, width = 8, height = 8, dpi = 400, device = "pdf")
+```
+
+# Fig 5b: pi_DEG × Delta NES
+
+```{r fig5b-pideg, message=FALSE, warning=FALSE}
+# Global 33rd/67th percentile cuts for pi_DEG across all four datasets,
+# rounded to nearest 1000: Low <2k, Medium 2k-4k, High >=4k genes.
+PI_LOW  <- 2000
+PI_HIGH <- 4000
+
+pideg_cat_levels <- c("Low (<2k)", "Medium (2k–4k)", "High (≥4k)")
+
+pideg_all <- bind_rows(
+  readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds"))  %>% transmute(dataset = "DrugMatrix",  TI, pi_DEG),
+  readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>% transmute(dataset = "Perturb-seq", TI, pi_DEG),
+  readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds"))     %>% transmute(dataset = "SciPlex",     TI, pi_DEG),
+  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds"))       %>% transmute(dataset = "Tahoe",       TI, pi_DEG)
+) %>%
+  filter(is.finite(pi_DEG)) %>%
+  mutate(
+    dataset   = factor(dataset, levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")),
+    pideg_cat = case_when(
+      pi_DEG <  PI_LOW  ~ pideg_cat_levels[1],
+      pi_DEG <  PI_HIGH ~ pideg_cat_levels[2],
+      TRUE              ~ pideg_cat_levels[3]
+    ),
+    pideg_cat = factor(pideg_cat, levels = pideg_cat_levels)
+  )
+
+# Panel A: CCDF of pi_DEG (log x-axis)
+pideg_ccdf_df <- pideg_all %>%
+  group_by(dataset) %>%
+  arrange(pi_DEG, .by_group = TRUE) %>%
+  mutate(ccdf = 1 - (seq_len(n()) / n())) %>%
+  ungroup()
+
+p_pideg_ccdf <- ggplot(pideg_ccdf_df, aes(x = pi_DEG, color = dataset)) +
+  geom_line(aes(y = ccdf), linewidth = 0.9) +
+  scale_x_log10(name = expression(pi[DEG] ~ "(log scale)"),
+                labels = function(x) paste0("1e", as.integer(log10(x)))) +
+  scale_y_log10(name = expression("Fraction with " ~ pi[DEG] ~ "> x"), labels = scales::percent) +
+  scale_color_brewer(palette = "Paired", name = "Dataset") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right",
+        legend.key.size = unit(0.5, "lines"),
+        axis.text.x     = element_text(angle = 45, hjust = 1))
+
+# Panel B: stacked bar of category fractions
+pideg_cat_summary <- pideg_all %>%
+  count(dataset, pideg_cat) %>%
+  group_by(dataset) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+p_pideg_bar <- ggplot(pideg_cat_summary, aes(x = dataset, y = prop, fill = pideg_cat)) +
+  geom_col(width = 0.7) +
+  scale_y_continuous(name = "Fraction of perturbations", labels = scales::percent) +
+  scale_fill_brewer(palette = "Paired", name = expression(pi[DEG] ~ "category")) +
+  labs(x = "") +
+  theme_classic(base_size = 9) +
+  theme(axis.text.x    = element_text(angle = 35, hjust = 1),
+        legend.position = "right")
+
+# Join pi_DEG to delta NES (same source-key logic as TI figure)
+pideg_join_df <- bind_rows(
+  readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds"))  %>% transmute(dataset = "DrugMatrix",  context_key, drug, pi_DEG),
+  readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>% transmute(dataset = "Perturb-seq", context_key, drug, pi_DEG),
+  readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds"))     %>% transmute(dataset = "SciPlex",     context_key, drug, pi_DEG),
+  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds"))       %>% transmute(dataset = "Tahoe",       context_key, drug, pi_DEG)
+)
+
+pideg_delta_joined <- ti_delta_eval %>%
+  mutate(source_key = case_when(
+    dataset == "Tahoe"                       ~ gsub("_", "", source),
+    dataset %in% c("SciPlex", "Perturb-seq") ~ sub("_.*", "", source),
+    TRUE                                     ~ source
+  )) %>%
+  left_join(pideg_join_df, by = c("dataset", "source_key" = "context_key", "gene" = "drug")) %>%
+  filter(!is.na(pi_DEG), !is.na(delta_NES), is.finite(pi_DEG)) %>%
+  mutate(
+    pideg_cat = case_when(
+      pi_DEG <  PI_LOW  ~ pideg_cat_levels[1],
+      pi_DEG <  PI_HIGH ~ pideg_cat_levels[2],
+      TRUE              ~ pideg_cat_levels[3]
+    ),
+    pideg_cat = factor(pideg_cat, levels = pideg_cat_levels),
+    dataset   = factor(dataset, levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe"))
+  )
+
+# Significance brackets (Wilcoxon, p < 0.05)
+pideg_comp_pairs <- tibble::tribble(
+  ~higher,             ~lower,
+  pideg_cat_levels[2], pideg_cat_levels[1],
+  pideg_cat_levels[3], pideg_cat_levels[2],
+  pideg_cat_levels[3], pideg_cat_levels[1]
+)
+
+pideg_signif_df <- purrr::map_dfr(unique(pideg_delta_joined$dataset), function(ds) {
+  dat <- filter(pideg_delta_joined, dataset == ds)
+  purrr::pmap_dfr(pideg_comp_pairs, function(higher, lower) {
+    x <- dat %>% filter(pideg_cat == higher) %>% pull(delta_NES)
+    y <- dat %>% filter(pideg_cat == lower)  %>% pull(delta_NES)
+    if (length(x) < 3 || length(y) < 3) return(NULL)
+    tibble(dataset = ds, xmin = lower, xmax = higher, p_value = wilcox.test(x, y)$p.value)
+  })
+}) %>%
+  filter(p_value < 0.05) %>%
+  mutate(
+    annotations = case_when(
+      p_value < 0.0001 ~ "****",
+      p_value < 0.001  ~ "***",
+      p_value < 0.01   ~ "**",
+      TRUE             ~ "*"
+    ),
+    dataset = factor(dataset, levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe"))
+  )
+
+pideg_y_stats <- pideg_delta_joined %>%
+  group_by(dataset) %>%
+  summarize(y_max   = max(delta_NES, na.rm = TRUE),
+            y_range = diff(range(delta_NES, na.rm = TRUE)),
+            .groups = "drop")
+
+pideg_signif_df <- pideg_signif_df %>%
+  left_join(pideg_y_stats, by = "dataset") %>%
+  group_by(dataset) %>%
+  mutate(y_position = y_max + row_number() * y_range * 0.13) %>%
+  ungroup()
+
+pideg_signif_annot <- pideg_signif_df %>%
+  mutate(
+    x1   = match(xmin, pideg_cat_levels),
+    x2   = match(xmax, pideg_cat_levels),
+    xmid = (x1 + x2) / 2,
+    tip  = y_range * 0.025
+  )
+
+# Panel C: Delta NES boxplot by pi_DEG category — one row, n labels on x-axis
+n_per_cat_c <- pideg_delta_joined %>%
+  count(dataset, pideg_cat)
+
+pideg_delta_joined <- pideg_delta_joined %>%
+  left_join(n_per_cat_c, by = c("dataset", "pideg_cat")) %>%
+  mutate(
+    pideg_cat_n = paste0(as.character(pideg_cat), "\n(n=", n, ")"),
+    pideg_cat_n = reorder(pideg_cat_n, as.integer(pideg_cat))
+  )
+
+p_pideg_delta <- ggplot(pideg_delta_joined, aes(x = pideg_cat_n, y = delta_NES, fill = pideg_cat)) +
+  geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.3, linewidth = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40", linewidth = 0.7) +
+  geom_segment(data = pideg_signif_annot,
+    aes(x = x1, xend = x2, y = y_position, yend = y_position),
+    inherit.aes = FALSE, linewidth = 0.4) +
+  geom_segment(data = pideg_signif_annot,
+    aes(x = x1, xend = x1, y = y_position - tip, yend = y_position),
+    inherit.aes = FALSE, linewidth = 0.4) +
+  geom_segment(data = pideg_signif_annot,
+    aes(x = x2, xend = x2, y = y_position - tip, yend = y_position),
+    inherit.aes = FALSE, linewidth = 0.4) +
+  geom_text(data = pideg_signif_annot,
+    aes(x = xmid, y = y_position, label = annotations),
+    inherit.aes = FALSE, size = 3.5, vjust = 0) +
+  facet_wrap(~dataset, scales = "free", nrow = 1) +
+  scale_fill_brewer(palette = "Paired") +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.2))) +
+  labs(x = expression(pi[DEG] ~ "category"), y = "Delta NES (predicted − source)") +
+  theme_classic(base_size = 9) +
+  theme(axis.text.x    = element_text(angle = 45, hjust = 1),
+        legend.position = "none",
+        strip.text      = element_text(face = "bold"),
+        panel.spacing   = unit(1, "lines"))
+
+top_row_pideg   <- cowplot::plot_grid(p_pideg_ccdf, p_pideg_bar, nrow = 1,
+                                      labels = c("A", "B"), label_size = 11,
+                                      rel_widths = c(1, 0.8))
+panel_fig_pideg <- cowplot::plot_grid(top_row_pideg, p_pideg_delta, ncol = 1,
+                                      labels = c("", "C"), label_size = 11,
+                                      rel_heights = c(1, 0.9))
+panel_fig_pideg
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig5_pideg.pdf"),
+       panel_fig_pideg, width = 8, height = 6.5, dpi = 400, device = cairo_pdf)
 ```
