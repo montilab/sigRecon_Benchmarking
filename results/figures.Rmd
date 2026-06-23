@@ -3946,3 +3946,97 @@ panel_fig_pideg
 ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig5_pideg.pdf"),
        panel_fig_pideg, width = 8, height = 6.5, dpi = 400, device = cairo_pdf)
 ```
+
+# Source metric distributions and delta vs source
+
+```{r source-dist-delta, message=FALSE, warning=FALSE}
+# Best method per dataset at 90th regime (same as used throughout)
+best_90th_all <- dplyr::bind_rows(
+  readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_90th_mean_eval_table.rds"))          %>% dplyr::mutate(dataset = "DrugMatrix"),
+  readRDS(file.path(RESULTS_PATH, "perturb-seq/ctrl_90th_networkprop_eval_table.rds"))  %>% dplyr::mutate(dataset = "Perturb-seq"),
+  readRDS(file.path(RESULTS_PATH, "sciplex/90th_projectcor_gsva_eval_table.rds"))       %>% dplyr::mutate(dataset = "SciPlex"),
+  readRDS(file.path(RESULTS_PATH, "tahoe/network_prop_90th_eval_table.rds"))            %>% dplyr::mutate(dataset = "Tahoe")
+) %>%
+  dplyr::filter(is.finite(NES_FALSE), is.finite(NES_TRUE),
+                is.finite(jacc_FALSE), is.finite(jacc_TRUE)) %>%
+  dplyr::mutate(
+    dataset    = factor(dataset, levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")),
+    delta_NES  = NES_TRUE  - NES_FALSE,
+    delta_jacc = jacc_TRUE - jacc_FALSE
+  )
+
+ds_pal <- RColorBrewer::brewer.pal(4, "Paired")
+names(ds_pal) <- c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")
+
+# Distribution of NES(source, target)
+p_dist_NES <- ggplot(best_90th_all, aes(x = NES_FALSE, color = dataset)) +
+  geom_density(linewidth = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+  scale_color_manual(values = ds_pal, name = "Dataset") +
+  labs(x = "NES (source, target)", y = "Density") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right")
+
+# Distribution of Jacc(source, target)
+p_dist_jacc <- ggplot(best_90th_all, aes(x = jacc_FALSE, color = dataset)) +
+  geom_density(linewidth = 0.8) +
+  scale_color_manual(values = ds_pal, name = "Dataset") +
+  labs(x = "Jaccard (source, target)", y = "Density") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right")
+
+# Delta NES vs NES(source, target)
+p_scatter_NES <- ggplot(best_90th_all, aes(x = NES_FALSE, y = delta_NES, color = dataset)) +
+  geom_point(alpha = 0.2, size = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+  scale_color_manual(values = ds_pal, name = "Dataset") +
+  labs(x = "NES (source, target)", y = "Delta NES (predicted − source)") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right")
+
+# Delta Jacc vs Jacc(source, target)
+p_scatter_jacc <- ggplot(best_90th_all, aes(x = jacc_FALSE, y = delta_jacc, color = dataset)) +
+  geom_point(alpha = 0.2, size = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+  scale_color_manual(values = ds_pal, name = "Dataset") +
+  labs(x = "Jaccard (source, target)", y = "Delta Jaccard (predicted − source)") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right")
+
+# Remove legends from all panels; extract shared legend from scatter (has line key)
+no_legend <- theme(legend.position = "none")
+
+shared_legend <- cowplot::get_legend(
+  p_scatter_NES +
+    guides(color = guide_legend(
+      title    = "Dataset",
+      override.aes = list(linetype = 1, shape = NA, linewidth = 1)
+    )) +
+    theme(legend.position = "right",
+          legend.key.size  = unit(0.6, "lines"),
+          legend.text      = element_text(size = 8),
+          legend.title     = element_text(size = 9, face = "bold"))
+)
+
+panel_grid <- cowplot::plot_grid(
+  p_dist_NES    + no_legend,
+  p_dist_jacc   + no_legend,
+  p_scatter_NES + no_legend,
+  p_scatter_jacc + no_legend,
+  nrow = 2, labels = c("A", "B", "C", "D"), label_size = 11
+)
+
+fig_source_delta <- cowplot::plot_grid(
+  panel_grid, shared_legend,
+  nrow = 1, rel_widths = c(1, 0.12)
+)
+
+fig_source_delta
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/source_dist_delta_combined.pdf"),
+       fig_source_delta, width = 10, height = 7, dpi = 400, device = cairo_pdf)
+```
