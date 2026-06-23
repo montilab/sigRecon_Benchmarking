@@ -2749,8 +2749,13 @@ make_gain_mat <- function(comp) {
   tahoe_moa_gain_df %>%
     dplyr::filter(comparison == comp) %>%
     dplyr::select(moa_fine_label, method, median_gain) %>%
-    dplyr::mutate(moa_fine_label = as.character(moa_fine_label),
-                  method = as.character(method)) %>%
+    dplyr::mutate(
+      moa_fine_label = as.character(moa_fine_label),
+      method = dplyr::recode(as.character(method),
+        "NetworkProp"        = "NetProp",
+        "ProjectCor (Eigen)" = "projCor-Eigen",
+        "ProjectCor (GSVA)"  = "projCor-GSVA")
+    ) %>%
     tidyr::pivot_wider(names_from = method, values_from = median_gain) %>%
     tibble::column_to_rownames("moa_fine_label") %>%
     .[row_order_hm, method_order_hm] %>%
