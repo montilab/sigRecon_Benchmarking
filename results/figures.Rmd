@@ -3277,6 +3277,250 @@ ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig2_ctrl_null.pdf"),
        fig2, width = 8, height = 5.14, dpi = 400, device = cairo_pdf)
 ```
 
+```{r paper-fig2-10th, message=FALSE, warning=FALSE, fig.width=14, fig.height=9}
+tahoe_stack_10th_swarm <- readRDS(file.path(RESULTS_PATH, "tahoe/stack_10th_eval_table.rds")) %>%
+  dplyr::filter(is.finite(NES_TRUE), is.finite(NES_FALSE),
+                is.finite(jacc_TRUE), is.finite(jacc_FALSE)) %>%
+  dplyr::transmute(drug = gene, method = "Stack",
+                   `NES ∆`     = NES_TRUE  - NES_FALSE,
+                   `Jaccard ∆` = jacc_TRUE - jacc_FALSE) %>%
+  tidyr::pivot_longer(c(`NES ∆`, `Jaccard ∆`), names_to = "metric", values_to = "value")
+
+ctrl_10th_swarm_all <- dplyr::bind_rows(
+  readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_10th_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "DrugMatrix"),
+  readRDS(file.path(RESULTS_PATH, "perturb-seq/ctrl_10th_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "Perturb-seq"),
+  readRDS(file.path(RESULTS_PATH, "sciplex/ctrl_10th_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "SciPlex"),
+  readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_10th_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "Tahoe"),
+  tahoe_stack_10th_swarm %>% dplyr::mutate(dataset = "Tahoe")
+) %>%
+  dplyr::mutate(
+    dataset = factor(dataset, levels = dataset_levels),
+    method  = dplyr::recode(method,
+      "NetworkProp"        = "NetProp",
+      "ProjectCor (Eigen)" = "projCor-Eigen",
+      "ProjectCor (GSVA)"  = "projCor-GSVA"
+    )
+  )
+
+method_pal_fig2_10th <- setNames(
+  RColorBrewer::brewer.pal(6, "Pastel1"),
+  c("Mean", "NetProp", "projCor-Eigen", "projCor-GSVA", "scGPT", "Stack")
+)
+
+ds_methods_10th <- list(
+  "DrugMatrix"  = c("Mean", "NetProp", "projCor-Eigen", "projCor-GSVA"),
+  "Perturb-seq" = c("Mean", "NetProp", "projCor-Eigen", "projCor-GSVA", "scGPT", "Stack"),
+  "SciPlex"     = c("Mean", "NetProp", "projCor-Eigen", "projCor-GSVA", "Stack"),
+  "Tahoe"       = c("Mean", "NetProp", "projCor-Eigen", "projCor-GSVA", "Stack")
+)
+
+make_ds_panel_10th <- function(ds, metric_name, show_title = TRUE, show_ylab = TRUE) {
+  methods <- ds_methods_10th[[ds]]
+  dat <- ctrl_10th_swarm_all %>%
+    dplyr::filter(dataset == ds, metric == metric_name) %>%
+    dplyr::mutate(method = factor(method, levels = methods))
+
+  p <- ggplot(dat, aes(x = method, y = value, fill = method)) +
+    geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+    ggbeeswarm::geom_quasirandom(width = 0.15, alpha = 0.15, size = 0.05,
+                                  groupOnX = TRUE) +
+    stat_summary(fun = median, geom = "point", shape = 21, size = 1,
+                 fill = "white") +
+    geom_hline(yintercept = 0, linetype = "dotted", color = "grey50",
+               linewidth = 0.8) +
+    scale_fill_manual(values = method_pal_fig2_10th) +
+    scale_x_discrete(limits = methods) +
+    labs(x = "", y = if (show_ylab) "Delta NES" else "") +
+    theme_classic(base_size = 9) +
+    theme(axis.text.x     = element_text(angle = 35, hjust = 1),
+          legend.position = "none")
+
+  if (show_title)
+    p <- p + ggtitle(ds) +
+      theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 11))
+  if (!show_ylab)
+    p <- p + theme(axis.text.y  = element_blank(),
+                   axis.ticks.y = element_blank())
+  p
+}
+
+make_ds_panel_jacc_10th <- function(ds, show_ylab) {
+  methods <- ds_methods_10th[[ds]]
+  dat <- ctrl_10th_swarm_all %>%
+    dplyr::filter(dataset == ds, metric == "Jaccard ∆") %>%
+    dplyr::mutate(method = factor(method, levels = methods))
+
+  p <- ggplot(dat, aes(x = method, y = value, fill = method)) +
+    geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+    ggbeeswarm::geom_quasirandom(width = 0.15, alpha = 0.15, size = 0.05,
+                                  groupOnX = TRUE) +
+    stat_summary(fun = median, geom = "point", shape = 21, size = 1,
+                 fill = "white") +
+    geom_hline(yintercept = 0, linetype = "dotted", color = "grey50",
+               linewidth = 0.8) +
+    scale_fill_manual(values = method_pal_fig2_10th) +
+    scale_x_discrete(limits = methods) +
+    labs(x = "", y = if (show_ylab) "Delta Jaccard" else "") +
+    theme_classic(base_size = 9) +
+    theme(axis.text.x     = element_text(angle = 35, hjust = 1),
+          legend.position = "none")
+
+  if (!show_ylab)
+    p <- p + theme(axis.text.y  = element_blank(),
+                   axis.ticks.y = element_blank())
+  p
+}
+
+row_nes_10th <- cowplot::plot_grid(
+  make_ds_panel_10th("DrugMatrix",  "NES ∆", show_title = TRUE,  show_ylab = TRUE),
+  make_ds_panel_10th("Perturb-seq", "NES ∆", show_title = TRUE,  show_ylab = FALSE),
+  make_ds_panel_10th("SciPlex",     "NES ∆", show_title = TRUE,  show_ylab = FALSE),
+  make_ds_panel_10th("Tahoe",       "NES ∆", show_title = TRUE,  show_ylab = FALSE),
+  nrow = 1, align = "hv", axis = "tb",
+  rel_widths = c(4, 6, 5, 4)
+)
+
+row_jacc_10th <- cowplot::plot_grid(
+  make_ds_panel_jacc_10th("DrugMatrix",  show_ylab = TRUE),
+  make_ds_panel_jacc_10th("Perturb-seq", show_ylab = FALSE),
+  make_ds_panel_jacc_10th("SciPlex",     show_ylab = FALSE),
+  make_ds_panel_jacc_10th("Tahoe",       show_ylab = FALSE),
+  nrow = 1, align = "hv", axis = "tb",
+  rel_widths = c(4, 6, 5, 4)
+)
+
+fig2_10th <- cowplot::plot_grid(row_nes_10th, row_jacc_10th, ncol = 1,
+                                 labels = c("A", "B"), label_size = 11,
+                                 rel_heights = c(1.15, 1))
+fig2_10th
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig2_ctrl_10th.pdf"),
+       fig2_10th, width = 8, height = 5.14, dpi = 400, device = cairo_pdf)
+```
+
+```{r paper-fig2-90th, message=FALSE, warning=FALSE, fig.width=14, fig.height=9}
+tahoe_stack_90th_swarm <- readRDS(file.path(RESULTS_PATH, "tahoe/stack_90th_eval_table.rds")) %>%
+  dplyr::filter(is.finite(NES_TRUE), is.finite(NES_FALSE),
+                is.finite(jacc_TRUE), is.finite(jacc_FALSE)) %>%
+  dplyr::transmute(drug = gene, method = "Stack",
+                   `NES ∆`     = NES_TRUE  - NES_FALSE,
+                   `Jaccard ∆` = jacc_TRUE - jacc_FALSE) %>%
+  tidyr::pivot_longer(c(`NES ∆`, `Jaccard ∆`), names_to = "metric", values_to = "value")
+
+ctrl_90th_swarm_all <- dplyr::bind_rows(
+  readRDS(file.path(RESULTS_PATH, "drugmatrix/ctrl_90th_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "DrugMatrix"),
+  readRDS(file.path(RESULTS_PATH, "perturb-seq/ctrl_90th_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "Perturb-seq"),
+  readRDS(file.path(RESULTS_PATH, "sciplex/ctrl_90th_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "SciPlex"),
+  readRDS(file.path(RESULTS_PATH, "tahoe/ctrl_90th_paired_swarm_plot_df.rds")) %>%
+    dplyr::mutate(dataset = "Tahoe"),
+  tahoe_stack_90th_swarm %>% dplyr::mutate(dataset = "Tahoe")
+) %>%
+  dplyr::mutate(
+    dataset = factor(dataset, levels = dataset_levels),
+    method  = dplyr::recode(method,
+      "NetworkProp"        = "NetProp",
+      "ProjectCor (Eigen)" = "projCor-Eigen",
+      "ProjectCor (GSVA)"  = "projCor-GSVA"
+    )
+  )
+
+method_pal_fig2_90th <- method_pal_fig2_10th  # same palette
+
+ds_methods_90th <- ds_methods_10th  # same method sets
+
+make_ds_panel_90th <- function(ds, metric_name, show_title = TRUE, show_ylab = TRUE) {
+  methods <- ds_methods_90th[[ds]]
+  dat <- ctrl_90th_swarm_all %>%
+    dplyr::filter(dataset == ds, metric == metric_name) %>%
+    dplyr::mutate(method = factor(method, levels = methods))
+
+  p <- ggplot(dat, aes(x = method, y = value, fill = method)) +
+    geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+    ggbeeswarm::geom_quasirandom(width = 0.15, alpha = 0.15, size = 0.05,
+                                  groupOnX = TRUE) +
+    stat_summary(fun = median, geom = "point", shape = 21, size = 1,
+                 fill = "white") +
+    geom_hline(yintercept = 0, linetype = "dotted", color = "grey50",
+               linewidth = 0.8) +
+    scale_fill_manual(values = method_pal_fig2_90th) +
+    scale_x_discrete(limits = methods) +
+    labs(x = "", y = if (show_ylab) "Delta NES" else "") +
+    theme_classic(base_size = 9) +
+    theme(axis.text.x     = element_text(angle = 35, hjust = 1),
+          legend.position = "none")
+
+  if (show_title)
+    p <- p + ggtitle(ds) +
+      theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 11))
+  if (!show_ylab)
+    p <- p + theme(axis.text.y  = element_blank(),
+                   axis.ticks.y = element_blank())
+  p
+}
+
+make_ds_panel_jacc_90th <- function(ds, show_ylab) {
+  methods <- ds_methods_90th[[ds]]
+  dat <- ctrl_90th_swarm_all %>%
+    dplyr::filter(dataset == ds, metric == "Jaccard ∆") %>%
+    dplyr::mutate(method = factor(method, levels = methods))
+
+  p <- ggplot(dat, aes(x = method, y = value, fill = method)) +
+    geom_violin(width = 0.9, alpha = 0.35, color = NA) +
+    ggbeeswarm::geom_quasirandom(width = 0.15, alpha = 0.15, size = 0.05,
+                                  groupOnX = TRUE) +
+    stat_summary(fun = median, geom = "point", shape = 21, size = 1,
+                 fill = "white") +
+    geom_hline(yintercept = 0, linetype = "dotted", color = "grey50",
+               linewidth = 0.8) +
+    scale_fill_manual(values = method_pal_fig2_90th) +
+    scale_x_discrete(limits = methods) +
+    labs(x = "", y = if (show_ylab) "Delta Jaccard" else "") +
+    theme_classic(base_size = 9) +
+    theme(axis.text.x     = element_text(angle = 35, hjust = 1),
+          legend.position = "none")
+
+  if (!show_ylab)
+    p <- p + theme(axis.text.y  = element_blank(),
+                   axis.ticks.y = element_blank())
+  p
+}
+
+row_nes_90th <- cowplot::plot_grid(
+  make_ds_panel_90th("DrugMatrix",  "NES ∆", show_title = TRUE,  show_ylab = TRUE),
+  make_ds_panel_90th("Perturb-seq", "NES ∆", show_title = TRUE,  show_ylab = FALSE),
+  make_ds_panel_90th("SciPlex",     "NES ∆", show_title = TRUE,  show_ylab = FALSE),
+  make_ds_panel_90th("Tahoe",       "NES ∆", show_title = TRUE,  show_ylab = FALSE),
+  nrow = 1, align = "hv", axis = "tb",
+  rel_widths = c(4, 6, 5, 4)
+)
+
+row_jacc_90th <- cowplot::plot_grid(
+  make_ds_panel_jacc_90th("DrugMatrix",  show_ylab = TRUE),
+  make_ds_panel_jacc_90th("Perturb-seq", show_ylab = FALSE),
+  make_ds_panel_jacc_90th("SciPlex",     show_ylab = FALSE),
+  make_ds_panel_jacc_90th("Tahoe",       show_ylab = FALSE),
+  nrow = 1, align = "hv", axis = "tb",
+  rel_widths = c(4, 6, 5, 4)
+)
+
+fig2_90th <- cowplot::plot_grid(row_nes_90th, row_jacc_90th, ncol = 1,
+                                 labels = c("A", "B"), label_size = 11,
+                                 rel_heights = c(1.15, 1))
+fig2_90th
+```
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig2_ctrl_90th.pdf"),
+       fig2_90th, width = 8, height = 5.14, dpi = 400, device = cairo_pdf)
+```
+
 ## Figure 3: Information scaling and method landscape
 
 ```{r paper-fig3, message=FALSE, warning=FALSE, fig.width=12, fig.height=9}
