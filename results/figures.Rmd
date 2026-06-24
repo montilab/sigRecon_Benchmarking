@@ -3720,7 +3720,6 @@ panel_b_Jacc <- build_panel_b(best_90th_Jacc, "jacc_FALSE", "jacc_TRUE",
 fig3_NES <- cowplot::plot_grid(fig3, panel_b_NES,
                                 ncol = 1, labels = c("A", "B"), label_size = 11,
                                 rel_heights = c(1, 1))
-fig3_NES
 ```
 
 ```{r}
@@ -4211,14 +4210,15 @@ best_90th_all <- dplyr::bind_rows(
     delta_jacc = jacc_TRUE - jacc_FALSE
   )
 
-ds_pal <- RColorBrewer::brewer.pal(4, "Paired")
-names(ds_pal) <- c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")
+ditto_pal <- scCustomize::DiscretePalette_scCustomize(num_colors = 4, palette = "ditto_seq")
+
+names(ditto_pal) <- c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")
 
 # Distribution of NES(source, target)
 p_dist_NES <- ggplot(best_90th_all, aes(x = NES_FALSE, color = dataset)) +
   geom_density(linewidth = 0.8) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
-  scale_color_manual(values = ds_pal, name = "Dataset") +
+  scale_color_manual(values = ditto_pal, name = "Dataset") +
   labs(x = "NES (source, target)", y = "Density") +
   theme_classic(base_size = 9) +
   theme(legend.position = "right")
@@ -4226,7 +4226,7 @@ p_dist_NES <- ggplot(best_90th_all, aes(x = NES_FALSE, color = dataset)) +
 # Distribution of Jacc(source, target)
 p_dist_jacc <- ggplot(best_90th_all, aes(x = jacc_FALSE, color = dataset)) +
   geom_density(linewidth = 0.8) +
-  scale_color_manual(values = ds_pal, name = "Dataset") +
+  scale_color_manual(values = ditto_pal, name = "Dataset") +
   labs(x = "Jaccard (source, target)", y = "Density") +
   theme_classic(base_size = 9) +
   theme(legend.position = "right")
@@ -4236,7 +4236,7 @@ p_scatter_NES <- ggplot(best_90th_all, aes(x = NES_FALSE, y = delta_NES, color =
   geom_point(alpha = 0.2, size = 0.6) +
   geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
-  scale_color_manual(values = ds_pal, name = "Dataset") +
+  scale_color_manual(values = ditto_pal, name = "Dataset") +
   labs(x = "NES (source, target)", y = "Delta NES (predicted − source)") +
   theme_classic(base_size = 9) +
   theme(legend.position = "right")
@@ -4246,7 +4246,7 @@ p_scatter_jacc <- ggplot(best_90th_all, aes(x = jacc_FALSE, y = delta_jacc, colo
   geom_point(alpha = 0.2, size = 0.6) +
   geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
-  scale_color_manual(values = ds_pal, name = "Dataset") +
+  scale_color_manual(values = ditto_pal, name = "Dataset") +
   labs(x = "Jaccard (source, target)", y = "Delta Jaccard (predicted − source)") +
   theme_classic(base_size = 9) +
   theme(legend.position = "right")
