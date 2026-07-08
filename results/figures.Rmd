@@ -4211,14 +4211,15 @@ best_90th_all <- dplyr::bind_rows(
   dplyr::filter(is.finite(NES_FALSE), is.finite(NES_TRUE),
                 is.finite(jacc_FALSE), is.finite(jacc_TRUE)) %>%
   dplyr::mutate(
-    dataset    = factor(dataset, levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")),
+    dataset    = factor(dataset, levels = c("Tahoe", "Perturb-seq", "SciPlex", "DrugMatrix")),
     delta_NES  = NES_TRUE  - NES_FALSE,
-    delta_jacc = jacc_TRUE - jacc_FALSE
+    delta_jacc = jacc_TRUE - jacc_FALSE,
+    sign_pred_NES = NES_TRUE > 0
   )
 
 ditto_pal <- scCustomize::DiscretePalette_scCustomize(num_colors = 4, palette = "ditto_seq")
 
-names(ditto_pal) <- c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")
+names(ditto_pal) <- c("Tahoe", "Perturb-seq", "SciPlex", "DrugMatrix")
 
 # Distribution of NES(source, target)
 p_dist_NES <- ggplot(best_90th_all, aes(x = NES_FALSE, color = dataset)) +
@@ -4237,10 +4238,28 @@ p_dist_jacc <- ggplot(best_90th_all, aes(x = jacc_FALSE, color = dataset)) +
   theme(legend.position = "right")
 
 # Delta NES vs NES(source, target)
+# Fit delta_NES ~ NES_FALSE + sign_pred_NES per dataset; draw one marginal line
+# per dataset at the observed proportion of sign groups (i.e. the NES_FALSE slope
+# after accounting for whether the prediction maintained its NES sign).
+nes_adj_lines <- best_90th_all %>%
+  dplyr::group_by(dataset) %>%
+  dplyr::group_modify(~{
+    fit    <- lm(delta_NES ~ NES_FALSE + sign_pred_NES, data = .x)
+    beta   <- coef(fit)
+    prop_t <- mean(.x$sign_pred_NES)
+    intercept <- beta["(Intercept)"] + beta["sign_pred_NESTRUE"] * prop_t
+    slope     <- beta["NES_FALSE"]
+    x_seq     <- seq(min(.x$NES_FALSE), max(.x$NES_FALSE), length.out = 80)
+    tibble::tibble(NES_FALSE = x_seq, delta_NES_adj = intercept + slope * x_seq)
+  }) %>%
+  dplyr::ungroup()
+
 p_scatter_NES <- ggplot(best_90th_all, aes(x = NES_FALSE, y = delta_NES, color = dataset)) +
   geom_point(alpha = 0.2, size = 0.6) +
-  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  geom_line(data = nes_adj_lines, aes(x = NES_FALSE, y = delta_NES_adj, color = dataset),
+            linewidth = 0.8, inherit.aes = FALSE) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+  geom_vline(xintercept = 0, linetype = "dotted", color = "grey60", linewidth = 0.4) +
   scale_color_manual(values = ditto_pal, name = "Dataset") +
   labs(x = "NES (source, target)", y = "Delta NES (predicted − source)") +
   theme_classic(base_size = 9) +
