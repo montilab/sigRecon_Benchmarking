@@ -4223,7 +4223,6 @@ names(ditto_pal) <- c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")
 # Distribution of NES(source, target)
 p_dist_NES <- ggplot(best_90th_all, aes(x = NES_FALSE, color = dataset)) +
   geom_density(linewidth = 0.8) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
   scale_color_manual(values = ditto_pal, name = "Dataset") +
   labs(x = "NES (source, target)", y = "Density") +
   theme_classic(base_size = 9) +
