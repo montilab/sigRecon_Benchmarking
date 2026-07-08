@@ -2481,7 +2481,13 @@ p_moa_delta <- ggplot(
         "NetworkProp"        = "NetProp",
         "ProjectCor (Eigen)" = "projCor-Eigen",
         "ProjectCor (GSVA)"  = "projCor-GSVA"
-      )
+      ),
+      regime = dplyr::recode(as.character(regime),
+        "90th"    = "High coverage (9/10)",
+        "10th"    = "Low coverage (1/10)",
+        "Control" = "Control"
+      ),
+      regime = factor(regime, levels = c("High coverage (9/10)", "Low coverage (1/10)", "Control"))
     ),
   aes(x = delta_NES, y = moa_fine_label)
 ) +
@@ -3569,9 +3575,9 @@ build_regime_hm <- function(paired_p, paired_stat, regime_label) {
 
 fig3_df_raw <- dplyr::bind_rows(
   build_regime_hm(paired_10th, paired_stat_10th,
-                  "Resource constrained (1/10)"),
+                  "Low coverage (1/10)"),
   build_regime_hm(paired_90th, paired_stat_90th,
-                  "Maximal information (9/10)")
+                  "High coverage (9/10)")
 )
 
 # Fill in all method × dataset × metric × regime combinations so that cells
@@ -3581,7 +3587,7 @@ all_combos <- tidyr::expand_grid(
   method  = factor(hm_method_levels, levels = hm_method_levels),
   dataset = factor(dataset_levels,   levels = dataset_levels),
   metric  = factor(c("NES","Jaccard"), levels = c("NES","Jaccard")),
-  regime  = c("Resource constrained (1/10)", "Maximal information (9/10)")
+  regime  = c("Low coverage (1/10)", "High coverage (9/10)")
 )
 
 fig3_df <- all_combos %>%
@@ -3589,8 +3595,8 @@ fig3_df <- all_combos %>%
                    by = c("method","dataset","metric","regime")) %>%
   dplyr::mutate(
     regime     = factor(regime,
-                        levels = c("Resource constrained (1/10)",
-                                   "Maximal information (9/10)")),
+                        levels = c("Low coverage (1/10)",
+                                   "High coverage (9/10)")),
     rank_label = dplyr::case_when(
       !is.na(rank)        ~ as.character(rank),
       !is.na(neg_log10p)  ~ "",        # p present but rank absent (shouldn't occur)
