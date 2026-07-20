@@ -196,10 +196,7 @@ all_eval_table <- rbind(
   mcf7_k562_eval_table
 )
 
-no_change_eval_table <- readRDS("/restricted/projectnb/brcameta/projects/sig_recon/results/eval/sciplex/no_change_eval_table.rds")
-combined_aggregated_df <- merge(no_change_eval_table %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+no_change_path <- "/restricted/projectnb/brcameta/projects/sig_recon/results/eval/sciplex/no_change_eval_table.rds"
+combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
 saveRDS(combined_aggregated_df,
         file.path(SAVE_PATH, paste0("stack_",SPLIT_TYPE,"_eval_table.rds")))

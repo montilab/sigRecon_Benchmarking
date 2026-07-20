@@ -46,9 +46,7 @@ pairs <- expand.grid(source = cell_lines,
 # No Change baseline
 # ------------------------------------------------
 
-all_eval_no_change_table <- readRDS(
-  file.path(SAVE_PATH, "no_change_eval_table.rds")
-)
+no_change_path <- file.path(SAVE_PATH, "no_change_eval_table.rds")
 
 # ------------------------------------------------
 # Helper to run evaluation
@@ -104,32 +102,22 @@ eval_experiment <- function(file_pattern, split_type = NULL){
 # # ------------------------------------------------
 # # 1. CONTROL experiment
 # # ------------------------------------------------
-# 
+#
 # ctrl_eval <- eval_experiment("control.rds")
-# 
-# combined_ctrl <- merge(
-#   all_eval_no_change_table %>% select(source,gene,NES,jacc),
-#   ctrl_eval %>% mutate(kept_alpha = kept/(kept+displaced)),
-#   by=c("source","gene"),
-#   suffixes=c("_FALSE","_TRUE")
-# ) %>% tibble()
-# 
+#
+# combined_ctrl <- paired_eval_table(ctrl_eval, no_change_path)
+#
 # saveRDS(combined_ctrl,
 #         file.path(SAVE_PATH,"ctrl_networkprop_eval_table.rds"))
 
 # # ------------------------------------------------
 # # 2. 1/10th experiment
 # # ------------------------------------------------
-# 
+#
 # ten_eval <- eval_experiment("*1_10th.rds","10th")
-# 
-# combined_10th <- merge(
-#   all_eval_no_change_table %>% select(source,gene,NES,jacc),
-#   ten_eval %>% mutate(kept_alpha = kept/(kept+displaced)),
-#   by=c("source","gene"),
-#   suffixes=c("_FALSE","_TRUE")
-# ) %>% tibble()
-# 
+#
+# combined_10th <- paired_eval_table(ten_eval, no_change_path)
+#
 # saveRDS(combined_10th,
 #         file.path(SAVE_PATH,"10th_networkprop_eval_table.rds"))
 
@@ -139,12 +127,7 @@ eval_experiment <- function(file_pattern, split_type = NULL){
 
 ninety_eval <- eval_experiment("*9_10th.rds","90th")
 
-combined_90th <- merge(
-  all_eval_no_change_table %>% select(source,gene,NES,jacc),
-  ninety_eval %>% mutate(kept_alpha = kept/(kept+displaced)),
-  by=c("source","gene"),
-  suffixes=c("_FALSE","_TRUE")
-) %>% tibble()
+combined_90th <- paired_eval_table(ninety_eval, no_change_path)
 
 saveRDS(combined_90th,
         file.path(SAVE_PATH,"90th_networkprop_eval_table.rds"))

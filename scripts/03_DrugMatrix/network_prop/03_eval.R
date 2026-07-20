@@ -48,7 +48,7 @@ drug_splits_path <- file.path(PATH, "data/sigs/drugmatrix/drug_splits.csv")
 # all_eval_no_change_table <- rbind(liver_kidney_eval_table_n,
 #                                   kidney_liver_eval_table_n)
 # saveRDS(all_eval_no_change_table, file.path(SAVE_PATH, "nochange_table.rds"))
-all_eval_no_change_table <- readRDS(file.path(SAVE_PATH, "nochange_table.rds"))
+no_change_path <- file.path(SAVE_PATH, "nochange_table.rds")
 # # Ctrl sigs
 # liver_pred_sigs <- readRDS(file.path(RECON_PATH, "liver_control.rds"))
 # kidney_pred_sigs <- readRDS(file.path(RECON_PATH, "kidney_control.rds"))
@@ -73,16 +73,13 @@ all_eval_no_change_table <- readRDS(file.path(SAVE_PATH, "nochange_table.rds"))
 # 
 # all_eval_table <- rbind(liver_kidney_eval_table,
 #                         kidney_liver_eval_table)
-# combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("source", "gene", "NES", "jacc"), 
-#                                 all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)), 
-#                                 by = c("source", "gene"), 
-#                                 suffixes = c("_FALSE", "_TRUE")) %>% tibble
+# combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
 # saveRDS(combined_aggregated_df, file.path(SAVE_PATH, "ctrl_networkprop_eval_table.rds"))
-# 
+#
 # combined_aggregated_df <- readRDS(file.path(SAVE_PATH, "ctrl_networkprop_eval_table.rds"))
-# 
-# 
-# # Unpaired 
+#
+#
+# # Unpaired
 # combined_aggregated_df %>% 
 #   dplyr::group_by(source) %>%
 #   dplyr::summarise(NES_mean = mean(NES_TRUE),
@@ -172,10 +169,7 @@ kidney_liver_eval_table <- sig_eval_table(source_sigs = lapply(kidney_true_sigs,
 
 all_eval_table <- rbind(liver_kidney_eval_table,
                         kidney_liver_eval_table)
-combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
 saveRDS(combined_aggregated_df, file.path(SAVE_PATH, "ctrl_10th_networkprop_eval_table.rds"))
 
 combined_aggregated_df <- readRDS(file.path(SAVE_PATH, "ctrl_10th_networkprop_eval_table.rds"))
@@ -272,15 +266,12 @@ combined_aggregated_df %>%
 # 
 # all_eval_table <- rbind(liver_kidney_eval_table,
 #                         kidney_liver_eval_table)
-# combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("source", "gene", "NES", "jacc"), 
-#                                 all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)), 
-#                                 by = c("source", "gene"), 
-#                                 suffixes = c("_FALSE", "_TRUE")) %>% tibble
+# combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
 # saveRDS(combined_aggregated_df, file.path(SAVE_PATH, "ctrl_90th_networkprop_eval_table.rds"))
-# 
+#
 # combined_aggregated_df <- readRDS(file.path(SAVE_PATH, "ctrl_90th_networkprop_eval_table.rds"))
-# 
-# # Unpaired 
+#
+# # Unpaired
 # combined_aggregated_df %>% 
 #   dplyr::group_by(source) %>%
 #   dplyr::summarise(NES_mean = mean(NES_TRUE),

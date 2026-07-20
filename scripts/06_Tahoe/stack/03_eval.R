@@ -90,12 +90,12 @@ saveRDS(all_eval_table,
 
 no_change_eval_table <- readRDS("/restricted/projectnb/brcameta/projects/sig_recon/results/eval/tahoe/no_change_eval_table.rds")
 no_change_eval_table$source <- paste0(no_change_eval_table$source, "_",toupper(no_change_eval_table$target))
-combined_aggregated_df <- merge(
-  no_change_eval_table %>% dplyr::select(source,gene,NES,jacc),
-  all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
-  by=c("source","gene"),
-  suffixes=c("_FALSE","_TRUE")
-) %>% tibble()
+# paired_eval_table() takes a file path (not a data frame) for the
+# no-change baseline, so the relabeled table needs to be written out once
+# before it can be used with the merge below.
+no_change_path <- tempfile(fileext = ".rds")
+saveRDS(no_change_eval_table, no_change_path)
+combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
 
 saveRDS(combined_aggregated_df,
         file.path(SAVE_PATH,

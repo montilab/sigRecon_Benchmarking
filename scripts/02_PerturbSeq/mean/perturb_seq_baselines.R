@@ -37,6 +37,8 @@ if(do_save) {
   no_change_df <- readRDS(file.path(PROJECT_PATH, "results/eval/perturb-seq/no_change_eval_table.rds"))
 }
 
+no_change_path <- file.path(PROJECT_PATH, "results/eval/perturb-seq/no_change_eval_table.rds")
+
 
 ## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 no_change_df %>% 
@@ -103,10 +105,7 @@ change_df %>%
 
 
 ## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-combined_aggregated_df <- merge(no_change_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                change_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(change_df, no_change_path)
 
 
 ## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -186,10 +185,7 @@ change_df %>%
 
 
 ## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-combined_aggregated_df <- merge(no_change_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                change_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(change_df, no_change_path)
 
 combined_aggregated_df %>% 
   filter(source=="rpe1") %>%
@@ -291,10 +287,7 @@ change_df %>%
 
 
 ## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-combined_aggregated_df <- merge(no_change_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                change_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(change_df, no_change_path)
 
 
 ## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

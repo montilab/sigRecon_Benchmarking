@@ -173,10 +173,11 @@ all_eval_no_change_table <- rbind(a549_mcf7_eval_table_n,
                                   k562_a549_eval_table_n,
                                   mcf7_a549_eval_table_n,
                                   mcf7_k562_eval_table_n)
-combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+# paired_eval_table() takes a file path (not a data frame) for the
+# no-change baseline, so it needs to be written out once before use.
+no_change_path <- tempfile(fileext = ".rds")
+saveRDS(all_eval_no_change_table, no_change_path)
+combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
 saveRDS(combined_aggregated_df, file.path(SAVE_PATH, "stack_ctrl_eval_table.rds"))
 
 # Unpaired 

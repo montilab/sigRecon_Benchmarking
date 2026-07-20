@@ -15,7 +15,7 @@ liver_sig_up <- lapply(drugmatrix.liver, function(x) x$up)
 # Loading drug splits
 drug_splits_path <- file.path(PATH, "data/sigs/drugmatrix/drug_splits.csv")
 
-all_eval_no_change_table <- readRDS(file.path(SAVE_PATH, "nochange_table.rds"))
+no_change_path <- file.path(SAVE_PATH, "nochange_table.rds")
 
 # 1. Control experiment
 liver_eigen_pred_sigs <- readRDS(file.path(RECON_PATH, "liver_kidney_ctrl_eigen.rds"))
@@ -35,10 +35,7 @@ kidney_liver_eval_table <- sig_eval_table(source_sigs = kidney_sig_up,
                                           BPPARAM = bp)
 all_eval_table <- rbind(liver_kidney_eval_table,
                         kidney_liver_eval_table)
-combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("source", "gene", "NES", "jacc"),
-                                all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
-                                by = c("source", "gene"),
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
 
 saveRDS(combined_aggregated_df, file.path(SAVE_PATH, "ctrl_projectcor_eigen_eval_table.rds"))
 
@@ -54,10 +51,7 @@ kidney_liver_eval_table <- sig_eval_table(source_sigs = kidney_sig_up,
                                           BPPARAM = bp)
 all_eval_table <- rbind(liver_kidney_eval_table,
                         kidney_liver_eval_table)
-combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("source", "gene", "NES", "jacc"),
-                                all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
-                                by = c("source", "gene"),
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
 saveRDS(combined_aggregated_df, file.path(SAVE_PATH, "ctrl_projectcor_gsva_eval_table.rds"))
 
 # ------------------------------------------------
@@ -108,13 +102,8 @@ for(regime in c("gsva","eigen")){
   all_eval_table <- rbind(liver_kidney_eval_table,
                           kidney_liver_eval_table)
   
-  combined_aggregated_df <- merge(
-    all_eval_no_change_table %>% dplyr::select("source","gene","NES","jacc"),
-    all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
-    by=c("source","gene"),
-    suffixes=c("_FALSE","_TRUE")
-  ) %>% tibble()
-  
+  combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
+
   saveRDS(combined_aggregated_df,
           file.path(SAVE_PATH,
                     paste0("10th_projectcor_",regime,"_eval_table.rds")))
@@ -169,13 +158,8 @@ for(regime in c("gsva","eigen")){
   all_eval_table <- rbind(liver_kidney_eval_table,
                           kidney_liver_eval_table)
   
-  combined_aggregated_df <- merge(
-    all_eval_no_change_table %>% dplyr::select("source","gene","NES","jacc"),
-    all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
-    by=c("source","gene"),
-    suffixes=c("_FALSE","_TRUE")
-  ) %>% tibble()
-  
+  combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
+
   saveRDS(combined_aggregated_df,
           file.path(SAVE_PATH,
                     paste0("90th_projectcor_",regime,"_eval_table.rds")))

@@ -19,6 +19,11 @@ all_eval_no_change_table <- readRDS(file.path(SAVE_PATH, "no_change_eval_table.r
 all_eval_no_change_table$source <- if_else(all_eval_no_change_table$source == "k562",
                                            "k562_rpe1",
                                            "rpe1_k562")
+# paired_eval_table() takes a file path (not a data frame) for the
+# no-change baseline, so the relabeled table needs to be written out once
+# before it can be used with the merges below.
+no_change_path <- tempfile(fileext = ".rds")
+saveRDS(all_eval_no_change_table, no_change_path)
 # # 1. Control experiment
 # k562_eigen_pred_sigs <- readRDS(file.path(RECON_PATH, "k562_rpe1_ctrl_eigen.rds"))
 # k562_gsva_pred_sigs <- readRDS(file.path(RECON_PATH, "k562_rpe1_ctrl_gsva.rds"))
@@ -37,11 +42,8 @@ all_eval_no_change_table$source <- if_else(all_eval_no_change_table$source == "k
 #                                           BPPARAM = bp)
 # all_eval_table <- rbind(k562_rpe1_eval_table,
 #                         rpe1_k562_eval_table)
-# combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("source", "gene", "NES", "jacc"),
-#                                 all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
-#                                 by = c("source", "gene"),
-#                                 suffixes = c("_FALSE", "_TRUE")) %>% tibble
-# 
+# combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
+#
 # saveRDS(combined_aggregated_df, file.path(SAVE_PATH, "ctrl_projectcor_eigen_eval_table.rds"))
 # 
 # k562_rpe1_eval_table <- sig_eval_table(source_sigs = k562_sig_up,
@@ -56,10 +58,7 @@ all_eval_no_change_table$source <- if_else(all_eval_no_change_table$source == "k
 #                                           BPPARAM = bp)
 # all_eval_table <- rbind(k562_rpe1_eval_table,
 #                         rpe1_k562_eval_table)
-# combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("source", "gene", "NES", "jacc"),
-#                                 all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
-#                                 by = c("source", "gene"),
-#                                 suffixes = c("_FALSE", "_TRUE")) %>% tibble
+# combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
 # saveRDS(combined_aggregated_df, file.path(SAVE_PATH, "ctrl_projectcor_gsva_eval_table.rds"))
 # 
 # # ------------------------------------------------
@@ -109,19 +108,14 @@ all_eval_no_change_table$source <- if_else(all_eval_no_change_table$source == "k
 #   
 #   all_eval_table <- rbind(k562_rpe1_eval_table,
 #                           rpe1_k562_eval_table)
-#   
-#   combined_aggregated_df <- merge(
-#     all_eval_no_change_table %>% dplyr::select("source","gene","NES","jacc"),
-#     all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
-#     by=c("source","gene"),
-#     suffixes=c("_FALSE","_TRUE")
-#   ) %>% tibble()
-#   
+#
+#   combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
+#
 #   saveRDS(combined_aggregated_df,
 #           file.path(SAVE_PATH,
 #                     paste0("10th_projectcor_",regime,"_eval_table.rds")))
 # }
-# 
+#
 
 # ------------------------------------------------
 # 3. 9/10th experiment
@@ -171,12 +165,7 @@ for(regime in c("gsva","eigen")){
   all_eval_table <- rbind(k562_rpe1_eval_table,
                           rpe1_k562_eval_table)
 
-  combined_aggregated_df <- merge(
-    all_eval_no_change_table %>% dplyr::select("source","gene","NES","jacc"),
-    all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)),
-    by=c("source","gene"),
-    suffixes=c("_FALSE","_TRUE")
-  ) %>% tibble()
+  combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
 
   saveRDS(combined_aggregated_df,
           file.path(SAVE_PATH,

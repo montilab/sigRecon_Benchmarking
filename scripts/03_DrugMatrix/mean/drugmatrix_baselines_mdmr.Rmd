@@ -71,6 +71,11 @@ kidney_recon_eval_table$source <- "kidney"
 
 ```{r}
 no_change_df <- rbind(liver_recon_eval_table, kidney_recon_eval_table)
+
+# paired_eval_table() takes a file path (not a data frame) for the
+# no-change baseline, so it needs to be written out once before use.
+no_change_path <- tempfile(fileext = ".rds")
+saveRDS(no_change_df, no_change_path)
 ```
 
 ```{r}
@@ -292,10 +297,7 @@ liver_kidney_results %>% drop_na
 
 # Paired
 ```{r}
-combined_aggregated_df <- merge(no_change_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                change_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(change_df, no_change_path)
 ```
 
 ```{r}

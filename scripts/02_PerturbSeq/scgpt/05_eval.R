@@ -46,10 +46,11 @@ all_eval_table <- rbind(rpe1_k562_eval_table,
                         k562_rpe1_eval_table)
 all_eval_no_change_table <- rbind(rpe1_k562_eval_table_n,
                                   k562_rpe1_eval_table_n)
-combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+# paired_eval_table() takes a file path (not a data frame) for the
+# no-change baseline, so it needs to be written out once before use.
+no_change_path <- tempfile(fileext = ".rds")
+saveRDS(all_eval_no_change_table, no_change_path)
+combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
 saveRDS(combined_aggregated_df, file.path(RESULTS_PATH, "scgpt_10th_eval_table.rds"))
 
 # Unpaired 
@@ -147,10 +148,9 @@ all_eval_table <- rbind(rpe1_k562_eval_table,
                         k562_rpe1_eval_table)
 all_eval_no_change_table <- rbind(rpe1_k562_eval_table_n,
                                   k562_rpe1_eval_table_n)
-combined_aggregated_df <- merge(all_eval_no_change_table %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                all_eval_table %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+no_change_path <- tempfile(fileext = ".rds")
+saveRDS(all_eval_no_change_table, no_change_path)
+combined_aggregated_df <- paired_eval_table(all_eval_table, no_change_path)
 saveRDS(combined_aggregated_df, file.path(RESULTS_PATH, "scgpt_90th_eval_table.rds"))
 
 # Unpaired 

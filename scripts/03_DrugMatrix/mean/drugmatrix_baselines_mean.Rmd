@@ -49,6 +49,8 @@ if(do_save) {
 } else {
   no_change_df <- readRDS(file.path(PROJECT_PATH, "results/eval/drugmatrix/no_change_eval_table.rds"))
 }
+
+no_change_path <- file.path(PROJECT_PATH, "results/eval/drugmatrix/no_change_eval_table.rds")
 ```
 
 ```{r}
@@ -121,10 +123,7 @@ change_df %>%
 
 ### Paired
 ```{r}
-combined_aggregated_df <- merge(no_change_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                change_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(change_df, no_change_path)
 ```
 
 ```{r}
@@ -204,10 +203,7 @@ change_df %>%
 
 ### Paired
 ```{r}
-combined_aggregated_df <- merge(no_change_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                change_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(change_df, no_change_path)
 ```
 
 ```{r}
@@ -287,10 +283,7 @@ change_df %>%
 
 ### Paired
 ```{r}
-combined_aggregated_df <- merge(no_change_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                change_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(change_df, no_change_path)
 ```
 
 ```{r}

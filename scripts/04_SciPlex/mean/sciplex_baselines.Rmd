@@ -68,6 +68,8 @@ if(do_save) {
   combined_no_recon_df <- readRDS(file.path(PROJECT_PATH, "results/eval/sciplex/no_change_eval_table.rds"))
 }
 
+no_change_path <- file.path(PROJECT_PATH, "results/eval/sciplex/no_change_eval_table.rds")
+
 ```
 
 ## Unpaired
@@ -146,10 +148,7 @@ if(do_save) {
 ```
 
 ```{r}
-combined_aggregated_df <- merge(combined_no_recon_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                combined_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(combined_df, no_change_path)
 ```
 
 ### Unpaired
@@ -275,10 +274,7 @@ if(do_save) {
 ```
 
 ```{r}
-combined_aggregated_df <- merge(combined_no_recon_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                combined_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(combined_df, no_change_path)
 ```
 
 ### Unpaired
@@ -404,10 +400,7 @@ if(do_save) {
 ```
 
 ```{r}
-combined_aggregated_df <- merge(combined_no_recon_df %>% dplyr::select("source", "gene", "NES", "jacc"), 
-                                combined_df %>% mutate(kept_alpha = kept/(kept+displaced)), 
-                                by = c("source", "gene"), 
-                                suffixes = c("_FALSE", "_TRUE")) %>% tibble
+combined_aggregated_df <- paired_eval_table(combined_df, no_change_path)
 ```
 
 ### Unpaired

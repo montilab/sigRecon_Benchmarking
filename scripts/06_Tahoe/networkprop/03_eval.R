@@ -117,7 +117,7 @@ combined_df <- foreach(
     target = cellline,
     splits = TRUE,
     split_file = file.path(PATH,"data/sigs/tahoe/drug_splits.csv"),
-    pb_col = "drug",
+    split_pb_col = "drug",
     split_type = "10th"
   )
   
@@ -156,7 +156,7 @@ combined_df <- foreach(
     target = cellline,
     splits = TRUE,
     split_file = file.path(PATH,"data/sigs/tahoe/drug_splits.csv"),
-    pb_col = "drug",
+    split_pb_col = "drug",
     split_type = "90th"
   )
   
