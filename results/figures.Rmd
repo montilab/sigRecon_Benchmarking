@@ -4310,3 +4310,60 @@ fig_source_delta
 ggsave(file.path(PROJECT_PATH, "results/plots/source_dist_delta_combined.pdf"),
        fig_source_delta, width = 10, height = 7, dpi = 400, device = cairo_pdf)
 ```
+
+```{r source-pred-vs-src, message=FALSE, warning=FALSE}
+# Panels A/B reuse distributions from above; C/D are direct pred ~ source scatters
+# that avoid the spurious negative correlation in delta ~ source formulations.
+
+p_nes_pred_vs_src <- ggplot(best_90th_all, aes(x = NES_FALSE, y = NES_TRUE, color = dataset)) +
+  geom_point(alpha = 0.2, size = 0.6) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dotted", color = "grey60", linewidth = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey60", linewidth = 0.4) +
+  scale_color_manual(values = ditto_pal, name = "Dataset") +
+  labs(x = "NES (source, target)", y = "NES (predicted, target)") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right")
+
+p_jacc_pred_vs_nes_src <- ggplot(best_90th_all, aes(x = jacc_FALSE, y = jacc_TRUE, color = dataset)) +
+  geom_point(alpha = 0.2, size = 0.6) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  scale_color_manual(values = ditto_pal, name = "Dataset") +
+  labs(x = "Jaccard (source, target)", y = "Jaccard (predicted, target)") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right")
+
+shared_legend_pred <- cowplot::get_legend(
+  p_nes_pred_vs_src +
+    guides(color = guide_legend(
+      title = "Dataset",
+      override.aes = list(linetype = 1, shape = NA, linewidth = 1)
+    )) +
+    theme(legend.position = "right",
+          legend.key.size  = unit(0.6, "lines"),
+          legend.text      = element_text(size = 8),
+          legend.title     = element_text(size = 9, face = "bold"))
+)
+
+panel_grid_pred <- cowplot::plot_grid(
+  p_dist_NES              + no_legend,
+  p_dist_jacc             + no_legend,
+  p_nes_pred_vs_src       + no_legend,
+  p_jacc_pred_vs_nes_src  + no_legend,
+  nrow = 2, labels = c("A", "B", "C", "D"), label_size = 11
+)
+
+fig_pred_vs_src <- cowplot::plot_grid(
+  panel_grid_pred, shared_legend_pred,
+  nrow = 1, rel_widths = c(1, 0.12)
+)
+
+fig_pred_vs_src
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/source_pred_vs_src_combined.pdf"),
+       fig_pred_vs_src, width = 10, height = 7, dpi = 400, device = cairo_pdf)
+```
