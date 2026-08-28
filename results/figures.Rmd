@@ -2539,6 +2539,248 @@ ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig4_tahoe_moa.pdf"),
        device = "pdf")
 ```
 
+# DrugMatrix Drug Class {.tabset}
+
+## Delta NES Across Methods
+```{r drugmatrix-class-delta, message=FALSE, warning=FALSE}
+dm_drug_class <- c(
+  "1-Naphthyl Isothiocyanate" = "Hepato/nephrotoxin",
+  "Allyl Alcohol"             = "Hepato/nephrotoxin",
+  "Carbon Tetrachloride"      = "Hepato/nephrotoxin",
+  "N-Nitrosodiethylamine"     = "Hepato/nephrotoxin",
+  "Lead (II) Acetate"         = "Heavy metal/toxin",
+  "Sodium Arsenite"           = "Heavy metal/toxin",
+  "N,N-Dimethylformamide"     = "Heavy metal/toxin",
+  "Atorvastatin"              = "Statin",
+  "Fluvastatin"               = "Statin",
+  "Lovastatin"                = "Statin",
+  "Bezafibrate"               = "Fibrate (PPARa)",
+  "Clofibrate"                = "Fibrate (PPARa)",
+  "Fenofibrate"               = "Fibrate (PPARa)",
+  "Gemfibrozil"               = "Fibrate (PPARa)",
+  "Ibuprofen"                 = "NSAID",
+  "Indomethacin"              = "NSAID",
+  "Meloxicam"                 = "NSAID",
+  "Naproxen"                  = "NSAID",
+  "Nimesulide"                = "NSAID",
+  "Sulindac"                  = "NSAID",
+  "Dexamethasone"             = "Corticosteroid",
+  "Fludrocortisone Acetate"   = "Corticosteroid",
+  "Hydrocortisone"            = "Corticosteroid",
+  "Prednisolone"              = "Corticosteroid",
+  "Beta-Estradiol"            = "Estrogen",
+  "Diethylstilbestrol"        = "Estrogen",
+  "Cholecalciferol"           = "Estrogen",
+  "Doxorubicin"               = "Anthracycline",
+  "Epirubicin"                = "Anthracycline",
+  "Erlotinib"                 = "EGFR inhibitor",
+  "Gefitinib"                 = "EGFR inhibitor",
+  "Azathioprine"              = "Immunosuppressant",
+  "Cyclosporin A"             = "Immunosuppressant",
+  "Leflunomide"               = "Immunosuppressant",
+  "Gentamicin"                = "Antibiotic/antifungal",
+  "Nystatin"                  = "Antibiotic/antifungal",
+  "Rifabutin"                 = "Antibiotic/antifungal",
+  "Bithionol"                 = "Other",
+  "Isoeugenol"                = "Other"
+)
+
+load_dm_eval <- function(path, method_label, regime_label) {
+  readRDS(path) %>% dplyr::mutate(method = method_label, regime = regime_label)
+}
+
+dm_class_df <- dplyr::bind_rows(
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/ctrl_mean_eval_table.rds"),             "Mean",          "Control"),
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/ctrl_networkprop_eval_table.rds"),      "NetProp",       "Control"),
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/ctrl_projectcor_eigen_eval_table.rds"), "projCor-Eigen", "Control"),
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/ctrl_projectcor_gsva_eval_table.rds"),  "projCor-GSVA",  "Control"),
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/ctrl_orthos_residual_eval_table.rds"),  "Orthos",        "Control"),
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/ctrl_10th_mean_eval_table.rds"),        "Mean",          "Low coverage (1/10)"),
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/ctrl_10th_networkprop_eval_table.rds"), "NetProp",       "Low coverage (1/10)"),
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/10th_projectcor_eigen_eval_table.rds"), "projCor-Eigen", "Low coverage (1/10)"),
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/10th_projectcor_gsva_eval_table.rds"),  "projCor-GSVA",  "Low coverage (1/10)"),
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/ctrl_90th_mean_eval_table.rds"),        "Mean",          "High coverage (9/10)"),
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/ctrl_90th_networkprop_eval_table.rds"), "NetProp",       "High coverage (9/10)"),
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/90th_projectcor_eigen_eval_table.rds"), "projCor-Eigen", "High coverage (9/10)"),
+  load_dm_eval(file.path(RESULTS_PATH, "drugmatrix/90th_projectcor_gsva_eval_table.rds"),  "projCor-GSVA",  "High coverage (9/10)")
+) %>%
+  dplyr::filter(is.finite(NES_TRUE), is.finite(NES_FALSE)) %>%
+  dplyr::mutate(delta_NES = NES_TRUE - NES_FALSE) %>%
+  # 1/10 tables stack all 10 CV splits; median across splits so each
+  # drug x source x method contributes one row in every regime.
+  dplyr::group_by(regime, method, gene, source) %>%
+  dplyr::summarise(delta_NES = median(delta_NES, na.rm = TRUE), .groups = "drop") %>%
+  dplyr::mutate(
+    drug_class = dm_drug_class[gene],
+    regime     = factor(regime, levels = c("High coverage (9/10)", "Low coverage (1/10)", "Control"))
+  ) %>%
+  dplyr::filter(!is.na(drug_class))
+
+dm_class_order <- dm_class_df %>%
+  dplyr::filter(regime == "High coverage (9/10)") %>%
+  dplyr::group_by(drug_class) %>%
+  dplyr::summarise(med = median(delta_NES, na.rm = TRUE), .groups = "drop") %>%
+  dplyr::arrange(med) %>%
+  dplyr::pull(drug_class)
+
+dm_class_counts <- dm_class_df %>%
+  dplyr::distinct(gene, drug_class) %>%
+  dplyr::count(drug_class)
+
+format_dm_class_label <- function(x) {
+  n <- dm_class_counts$n[match(x, dm_class_counts$drug_class)]
+  paste0(x, " (", n, ")")
+}
+
+dm_regime_pal <- c(
+  "High coverage (9/10)" = "#6baed6",
+  "Low coverage (1/10)"  = "#74c476",
+  "Control"              = "#fd8d3c"
+)
+
+p_dm_class_delta <- ggplot(
+  dm_class_df %>% dplyr::mutate(drug_class = factor(drug_class, levels = dm_class_order)),
+  aes(x = delta_NES, y = drug_class)
+) +
+  geom_vline(xintercept = 0, color = "grey70", linewidth = 0.35) +
+  geom_boxplot(aes(fill = regime), outlier.shape = NA, alpha = 0.65, width = 0.55) +
+  ggbeeswarm::geom_quasirandom(
+    aes(color = method, group = drug_class),
+    width = 0.18, size = 0.9, alpha = 0.4, groupOnX = FALSE
+  ) +
+  facet_wrap(vars(regime), nrow = 1) +
+  scale_fill_manual(values = dm_regime_pal, guide = "none") +
+  scale_y_discrete(labels = format_dm_class_label) +
+  labs(x = "Delta NES", y = NULL, color = "Method") +
+  theme_bw(base_size = 9) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text       = element_text(face = "bold"),
+    legend.position  = "right"
+  )
+
+p_dm_class_delta
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_class_delta_NES.pdf"),
+       p_dm_class_delta, width = 8, height = 5, dpi = 400, device = cairo_pdf)
+```
+
+# SciPlex Drug Class {.tabset}
+
+## Delta NES Across Methods
+```{r sciplex-class-delta, message=FALSE, warning=FALSE}
+sciplex_drug_class <- c(
+  "Abexinostat (PCI-24781)"         = "HDAC inhibitor",
+  "AR-42"                           = "HDAC inhibitor",
+  "Belinostat (PXD101)"             = "HDAC inhibitor",
+  "Dacinostat (LAQ824)"             = "HDAC inhibitor",
+  "Entinostat (MS-275)"             = "HDAC inhibitor",
+  "Givinostat (ITF2357)"            = "HDAC inhibitor",
+  "M344"                            = "HDAC inhibitor",
+  "Mocetinostat (MGCD0103)"         = "HDAC inhibitor",
+  "Panobinostat (LBH589)"           = "HDAC inhibitor",
+  "Pracinostat (SB939)"             = "HDAC inhibitor",
+  "Quisinostat (JNJ-26481585) 2HCl" = "HDAC inhibitor",
+  "Resminostat"                     = "HDAC inhibitor",
+  "Alvespimycin (17-DMAG) HCl"     = "HSP90 inhibitor",
+  "Tanespimycin (17-AAG)"           = "HSP90 inhibitor",
+  "CUDC-101"                        = "Dual EGFR/HDAC",
+  "CUDC-907"                        = "Dual PI3K/HDAC",
+  "Danusertib (PHA-739358)"         = "Aurora kinase inhibitor",
+  "Hesperadin"                      = "Aurora kinase inhibitor",
+  "g(+)-JQ1"                        = "BET inhibitor",
+  "Trametinib (GSK1120212)"         = "MEK inhibitor",
+  "Triamcinolone Acetonide"         = "Corticosteroid",
+  "Raltitrexed"                     = "Thymidylate synthase inhibitor",
+  "YM155 (Sepantronium Bromide)"    = "Survivin inhibitor"
+)
+
+load_sc_eval <- function(path, method_label, regime_label) {
+  readRDS(path) %>% dplyr::mutate(method = method_label, regime = regime_label)
+}
+
+sciplex_class_df <- dplyr::bind_rows(
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/ctrl_mean_eval_table.rds"),             "Mean",          "Control"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/ctrl_networkprop_eval_table.rds"),      "NetProp",       "Control"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/ctrl_projectcor_eigen_eval_table.rds"), "projCor-Eigen", "Control"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/ctrl_projectcor_gsva_eval_table.rds"),  "projCor-GSVA",  "Control"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/stack_ctrl_eval_table.rds"),            "Stack",         "Control"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/ctrl_10th_mean_eval_table.rds"),        "Mean",          "Low coverage (1/10)"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/10th_networkprop_eval_table.rds"),      "NetProp",       "Low coverage (1/10)"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/10th_projectcor_eigen_eval_table.rds"), "projCor-Eigen", "Low coverage (1/10)"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/10th_projectcor_gsva_eval_table.rds"),  "projCor-GSVA",  "Low coverage (1/10)"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/stack_10th_eval_table.rds"),            "Stack",         "Low coverage (1/10)"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/ctrl_90th_mean_eval_table.rds"),        "Mean",          "High coverage (9/10)"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/90th_networkprop_eval_table.rds"),      "NetProp",       "High coverage (9/10)"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/90th_projectcor_eigen_eval_table.rds"), "projCor-Eigen", "High coverage (9/10)"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/90th_projectcor_gsva_eval_table.rds"),  "projCor-GSVA",  "High coverage (9/10)"),
+  load_sc_eval(file.path(RESULTS_PATH, "sciplex/stack_90th_eval_table.rds"),            "Stack",         "High coverage (9/10)")
+) %>%
+  dplyr::filter(is.finite(NES_TRUE), is.finite(NES_FALSE)) %>%
+  dplyr::mutate(delta_NES = NES_TRUE - NES_FALSE) %>%
+  # 1/10 tables contain all 10 CV splits stacked; median across splits so each
+  # drug x source x method contributes one row in every regime.
+  dplyr::group_by(regime, method, gene, source) %>%
+  dplyr::summarise(delta_NES = median(delta_NES, na.rm = TRUE), .groups = "drop") %>%
+  dplyr::mutate(
+    drug_class = sciplex_drug_class[gene],
+    regime     = factor(regime, levels = c("High coverage (9/10)", "Low coverage (1/10)", "Control"))
+  ) %>%
+  dplyr::filter(!is.na(drug_class))
+
+sc_class_order <- sciplex_class_df %>%
+  dplyr::filter(regime == "High coverage (9/10)") %>%
+  dplyr::group_by(drug_class) %>%
+  dplyr::summarise(med = median(delta_NES, na.rm = TRUE), .groups = "drop") %>%
+  dplyr::arrange(med) %>%
+  dplyr::pull(drug_class)
+
+sc_class_counts <- sciplex_class_df %>%
+  dplyr::distinct(gene, drug_class) %>%
+  dplyr::count(drug_class)
+
+format_sc_class_label <- function(x) {
+  n <- sc_class_counts$n[match(x, sc_class_counts$drug_class)]
+  paste0(x, " (", n, ")")
+}
+
+sc_regime_pal <- c(
+  "High coverage (9/10)" = "#6baed6",
+  "Low coverage (1/10)"  = "#74c476",
+  "Control"              = "#fd8d3c"
+)
+
+p_sc_class_delta <- ggplot(
+  sciplex_class_df %>% dplyr::mutate(drug_class = factor(drug_class, levels = sc_class_order)),
+  aes(x = delta_NES, y = drug_class)
+) +
+  geom_vline(xintercept = 0, color = "grey70", linewidth = 0.35) +
+  geom_boxplot(aes(fill = regime), outlier.shape = NA, alpha = 0.65, width = 0.55) +
+  ggbeeswarm::geom_quasirandom(
+    aes(color = method, group = drug_class),
+    width = 0.18, size = 0.9, alpha = 0.4, groupOnX = FALSE
+  ) +
+  facet_wrap(vars(regime), nrow = 1) +
+  scale_fill_manual(values = sc_regime_pal, guide = "none") +
+  scale_y_discrete(labels = format_sc_class_label) +
+  labs(x = "Delta NES", y = NULL, color = "Method") +
+  theme_bw(base_size = 9) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text       = element_text(face = "bold"),
+    legend.position  = "right"
+  )
+
+p_sc_class_delta
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/sciplex_class_delta_NES.pdf"),
+       p_sc_class_delta, width = 8, height = 5, dpi = 400, device = cairo_pdf)
+```
+
 ## Gain Heatmaps
 ```{r}
 if (do_save_tahoe) {
@@ -4366,4 +4608,167 @@ fig_pred_vs_src
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/source_pred_vs_src_combined.pdf"),
        fig_pred_vs_src, width = 10, height = 7, dpi = 400, device = cairo_pdf)
+```
+
+```{r source-rel-improvement, message=FALSE, warning=FALSE}
+# Relative improvement: (delta) / source_similarity = (pred - source) / source
+# Panels A/B same distributions; C/D show the normalised metric.
+# NES: filter to NES_FALSE > 0 (the few negative-source pairs flip the sign of
+# the denominator, making the normalised value uninterpretable).
+best_90th_rel <- best_90th_all %>%
+  dplyr::mutate(
+    rel_NES  = dplyr::if_else(NES_FALSE  > 0, delta_NES  / NES_FALSE,  NA_real_),
+    rel_jacc = dplyr::if_else(jacc_FALSE > 0, delta_jacc / jacc_FALSE, NA_real_)
+  )
+
+# Covariate-adjusted line for NES: rel_NES ~ NES_FALSE + sign_pred_NES
+rel_nes_adj_lines <- best_90th_rel %>%
+  dplyr::filter(!is.na(rel_NES)) %>%
+  dplyr::group_by(dataset) %>%
+  dplyr::group_modify(~{
+    fit    <- lm(rel_NES ~ NES_FALSE + sign_pred_NES, data = .x)
+    beta   <- coef(fit)
+    prop_t <- mean(.x$sign_pred_NES)
+    intercept <- beta["(Intercept)"] + beta["sign_pred_NESTRUE"] * prop_t
+    x_seq     <- seq(min(.x$NES_FALSE), max(.x$NES_FALSE), length.out = 80)
+    tibble::tibble(NES_FALSE = x_seq, rel_NES_adj = intercept + beta["NES_FALSE"] * x_seq)
+  }) %>%
+  dplyr::ungroup()
+
+p_rel_NES <- ggplot(
+  best_90th_rel %>% dplyr::filter(!is.na(rel_NES)),
+  aes(x = NES_FALSE, y = rel_NES, color = dataset)
+) +
+  geom_point(alpha = 0.2, size = 0.6) +
+  geom_line(data = rel_nes_adj_lines,
+            aes(x = NES_FALSE, y = rel_NES_adj, color = dataset),
+            linewidth = 0.8, inherit.aes = FALSE) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+  scale_color_manual(values = ditto_pal, name = "Dataset") +
+  labs(x = "NES (source, target)", y = "Relative NES improvement\n(delta NES / source NES)") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right")
+
+p_rel_jacc <- ggplot(
+  best_90th_rel %>% dplyr::filter(!is.na(rel_jacc)),
+  aes(x = jacc_FALSE, y = rel_jacc, color = dataset)
+) +
+  geom_point(alpha = 0.2, size = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+  scale_color_manual(values = ditto_pal, name = "Dataset") +
+  labs(x = "Jaccard (source, target)", y = "Relative Jaccard improvement\n(delta Jaccard / source Jaccard)") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right")
+
+shared_legend_rel <- cowplot::get_legend(
+  p_rel_NES +
+    guides(color = guide_legend(
+      title = "Dataset",
+      override.aes = list(linetype = 1, shape = NA, linewidth = 1)
+    )) +
+    theme(legend.position = "right",
+          legend.key.size  = unit(0.6, "lines"),
+          legend.text      = element_text(size = 8),
+          legend.title     = element_text(size = 9, face = "bold"))
+)
+
+panel_grid_rel <- cowplot::plot_grid(
+  p_dist_NES   + no_legend,
+  p_dist_jacc  + no_legend,
+  p_rel_NES    + no_legend,
+  p_rel_jacc   + no_legend,
+  nrow = 2, labels = c("A", "B", "C", "D"), label_size = 11
+)
+
+fig_rel_improvement <- cowplot::plot_grid(
+  panel_grid_rel, shared_legend_rel,
+  nrow = 1, rel_widths = c(1, 0.12)
+)
+
+fig_rel_improvement
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/source_rel_improvement_combined.pdf"),
+       fig_rel_improvement, width = 10, height = 7, dpi = 400, device = cairo_pdf)
+```
+
+```{r source-binned-sd, message=FALSE, warning=FALSE}
+# Panels C/D: SD(delta) within 10 equal-width bins of source similarity.
+# Bins span [min, max] of each metric across all datasets; computed per dataset.
+nes_breaks  <- seq(min(best_90th_all$NES_FALSE),  max(best_90th_all$NES_FALSE),  length.out = 6)
+jacc_breaks <- seq(min(best_90th_all$jacc_FALSE), max(best_90th_all$jacc_FALSE), length.out = 6)
+
+sd_binned <- best_90th_all %>%
+  dplyr::mutate(
+    bin_NES  = cut(NES_FALSE,  breaks = nes_breaks,  include.lowest = TRUE),
+    bin_jacc = cut(jacc_FALSE, breaks = jacc_breaks, include.lowest = TRUE)
+  ) %>%
+  dplyr::group_by(dataset, bin_NES) %>%
+  dplyr::mutate(sd_delta_NES = sd(delta_NES)) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(dataset, bin_jacc) %>%
+  dplyr::mutate(sd_delta_jacc = sd(delta_jacc)) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(
+    bin_NES_mid  = (nes_breaks[as.integer(bin_NES)]  + nes_breaks[as.integer(bin_NES)  + 1]) / 2,
+    bin_jacc_mid = (jacc_breaks[as.integer(bin_jacc)] + jacc_breaks[as.integer(bin_jacc) + 1]) / 2
+  )
+
+sd_NES_df  <- sd_binned %>%
+  dplyr::distinct(dataset, bin_NES, bin_NES_mid, sd_delta_NES) %>%
+  dplyr::filter(!is.na(sd_delta_NES))
+
+sd_jacc_df <- sd_binned %>%
+  dplyr::distinct(dataset, bin_jacc, bin_jacc_mid, sd_delta_jacc) %>%
+  dplyr::filter(!is.na(sd_delta_jacc))
+
+p_sd_NES <- ggplot(sd_NES_df, aes(x = bin_NES_mid, y = sd_delta_NES, color = dataset)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.8) +
+  scale_color_manual(values = ditto_pal, name = "Dataset") +
+  labs(x = "NES (source, target)", y = "SD(delta NES)") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right")
+
+p_sd_jacc <- ggplot(sd_jacc_df, aes(x = bin_jacc_mid, y = sd_delta_jacc, color = dataset)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.8) +
+  scale_color_manual(values = ditto_pal, name = "Dataset") +
+  labs(x = "Jaccard (source, target)", y = "SD(delta Jaccard)") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right")
+
+shared_legend_sd <- cowplot::get_legend(
+  p_sd_NES +
+    guides(color = guide_legend(
+      title = "Dataset",
+      override.aes = list(linetype = 1, shape = 16, linewidth = 1)
+    )) +
+    theme(legend.position = "right",
+          legend.key.size  = unit(0.6, "lines"),
+          legend.text      = element_text(size = 8),
+          legend.title     = element_text(size = 9, face = "bold"))
+)
+
+panel_grid_sd <- cowplot::plot_grid(
+  p_dist_NES  + no_legend,
+  p_dist_jacc + no_legend,
+  p_sd_NES    + no_legend,
+  p_sd_jacc   + no_legend,
+  nrow = 2, labels = c("A", "B", "C", "D"), label_size = 11
+)
+
+fig_binned_sd <- cowplot::plot_grid(
+  panel_grid_sd, shared_legend_sd,
+  nrow = 1, rel_widths = c(1, 0.12)
+)
+
+fig_binned_sd
+```
+
+```{r}
+ggsave("/tmp/source_binned_sd_combined.pdf",
+       fig_binned_sd, width = 10, height = 7, dpi = 400, device = cairo_pdf)
 ```
