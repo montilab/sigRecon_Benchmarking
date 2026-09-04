@@ -2554,10 +2554,10 @@ dm_drug_class <- c(
   "Atorvastatin"              = "Statin",
   "Fluvastatin"               = "Statin",
   "Lovastatin"                = "Statin",
-  "Bezafibrate"               = "Fibrate (PPARa)",
-  "Clofibrate"                = "Fibrate (PPARa)",
-  "Fenofibrate"               = "Fibrate (PPARa)",
-  "Gemfibrozil"               = "Fibrate (PPARa)",
+  "Bezafibrate"               = "Fibrate (PPAR-alpha)",
+  "Clofibrate"                = "Fibrate (PPAR-alpha)",
+  "Fenofibrate"               = "Fibrate (PPAR-alpha)",
+  "Gemfibrozil"               = "Fibrate (PPAR-alpha)",
   "Ibuprofen"                 = "NSAID",
   "Indomethacin"              = "NSAID",
   "Meloxicam"                 = "NSAID",
@@ -2779,6 +2779,55 @@ p_sc_class_delta
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/sciplex_class_delta_NES.pdf"),
        p_sc_class_delta, width = 8, height = 5, dpi = 400, device = cairo_pdf)
+```
+
+## HDAC vs Non-HDAC
+```{r sciplex-hdac-delta, message=FALSE, warning=FALSE}
+# CUDC-101/CUDC-907 are dual-target (EGFR/HDAC, PI3K/HDAC) and excluded so the
+# HDAC vs non-HDAC split is unambiguous.
+sciplex_hdac_df <- sciplex_class_df %>%
+  dplyr::filter(!drug_class %in% c("Dual EGFR/HDAC", "Dual PI3K/HDAC")) %>%
+  dplyr::mutate(
+    hdac_group = ifelse(drug_class == "HDAC inhibitor", "HDAC inhibitor", "Non-HDAC")
+  )
+
+sc_hdac_counts <- sciplex_hdac_df %>%
+  dplyr::distinct(gene, hdac_group) %>%
+  dplyr::count(hdac_group)
+
+format_sc_hdac_label <- function(x) {
+  n <- sc_hdac_counts$n[match(x, sc_hdac_counts$hdac_group)]
+  paste0(x, " (", n, ")")
+}
+
+p_sc_hdac_delta <- ggplot(
+  sciplex_hdac_df %>%
+    dplyr::mutate(hdac_group = factor(hdac_group, levels = c("Non-HDAC", "HDAC inhibitor"))),
+  aes(x = delta_NES, y = hdac_group)
+) +
+  geom_vline(xintercept = 0, color = "grey70", linewidth = 0.35) +
+  geom_boxplot(aes(fill = regime), outlier.shape = NA, alpha = 0.65, width = 0.55) +
+  ggbeeswarm::geom_quasirandom(
+    aes(color = method, group = hdac_group),
+    width = 0.18, size = 0.9, alpha = 0.4, groupOnX = FALSE
+  ) +
+  facet_wrap(vars(regime), nrow = 1) +
+  scale_fill_manual(values = sc_regime_pal, guide = "none") +
+  scale_y_discrete(labels = format_sc_hdac_label) +
+  labs(x = "Delta NES", y = NULL, color = "Method") +
+  theme_bw(base_size = 9) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text       = element_text(face = "bold"),
+    legend.position  = "right"
+  )
+
+p_sc_hdac_delta
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/sciplex_hdac_delta_NES.pdf"),
+       p_sc_hdac_delta, width = 8, height = 3.5, dpi = 400, device = cairo_pdf)
 ```
 
 ## Gain Heatmaps
@@ -4258,18 +4307,31 @@ ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig5_combined_panel.pdf"),
 # Fig 5b: pi_DEG × Delta NES
 
 ```{r fig5b-pideg, message=FALSE, warning=FALSE}
-# Global 33rd/67th percentile cuts for pi_DEG across all four datasets,
-# rounded to nearest 1000: Low <2k, Medium 2k-4k, High >=4k genes.
+# NOTE (flagged in review, unresolved as of this commit): pi_DEG values cached in
+# these context_trade_metrics.rds files run 2-3 orders of magnitude above the TRADE
+# paper's own benchmarks (median 45 genome-wide K562, >500 for essential-gene
+# perturbations); PI_LOW/PI_HIGH below were chosen to split *this* (likely inflated)
+# distribution into thirds, not against an external reference. scripts/*/*_trade_eval_
+# correlations.R now compute a per-perturbation trade_flag ("pi_DEG_exceeds_n_genes")
+# that catches the mathematically-extreme tail (pi_DEG > n_genes_trade, which requires
+# ash's fitted excess kurtosis < 3 -- essentially never true for real transcriptomes),
+# but the cached RDS files here predate that change and don't have the column yet.
+# Re-run compute_trade_metrics() on HPC to regenerate them before trusting this panel;
+# the filter below activates automatically once trade_flag is present.
 PI_LOW  <- 2000
 PI_HIGH <- 4000
 
 pideg_cat_levels <- c("Low (<2k)", "Medium (2k–4k)", "High (≥4k)")
 
+drop_flagged <- function(df) {
+  if ("trade_flag" %in% names(df)) dplyr::filter(df, is.na(trade_flag)) else df
+}
+
 pideg_all <- bind_rows(
-  readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds"))  %>% transmute(dataset = "DrugMatrix",  TI, pi_DEG),
-  readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>% transmute(dataset = "Perturb-seq", TI, pi_DEG),
-  readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds"))     %>% transmute(dataset = "SciPlex",     TI, pi_DEG),
-  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds"))       %>% transmute(dataset = "Tahoe",       TI, pi_DEG)
+  readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds"))  %>% drop_flagged() %>% transmute(dataset = "DrugMatrix",  TI, pi_DEG),
+  readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>% drop_flagged() %>% transmute(dataset = "Perturb-seq", TI, pi_DEG),
+  readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds"))     %>% drop_flagged() %>% transmute(dataset = "SciPlex",     TI, pi_DEG),
+  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds"))       %>% drop_flagged() %>% transmute(dataset = "Tahoe",       TI, pi_DEG)
 ) %>%
   filter(is.finite(pi_DEG)) %>%
   mutate(
@@ -4318,10 +4380,10 @@ p_pideg_bar <- ggplot(pideg_cat_summary, aes(x = dataset, y = prop, fill = pideg
 
 # Join pi_DEG to delta NES (same source-key logic as TI figure)
 pideg_join_df <- bind_rows(
-  readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds"))  %>% transmute(dataset = "DrugMatrix",  context_key, drug, pi_DEG),
-  readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>% transmute(dataset = "Perturb-seq", context_key, drug, pi_DEG),
-  readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds"))     %>% transmute(dataset = "SciPlex",     context_key, drug, pi_DEG),
-  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds"))       %>% transmute(dataset = "Tahoe",       context_key, drug, pi_DEG)
+  readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds"))  %>% drop_flagged() %>% transmute(dataset = "DrugMatrix",  context_key, drug, pi_DEG),
+  readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>% drop_flagged() %>% transmute(dataset = "Perturb-seq", context_key, drug, pi_DEG),
+  readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds"))     %>% drop_flagged() %>% transmute(dataset = "SciPlex",     context_key, drug, pi_DEG),
+  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds"))       %>% drop_flagged() %>% transmute(dataset = "Tahoe",       context_key, drug, pi_DEG)
 )
 
 pideg_delta_joined <- ti_delta_eval %>%

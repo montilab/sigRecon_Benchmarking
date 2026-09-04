@@ -22,6 +22,42 @@ clean_label <- function(path) tools::file_path_sans_ext(basename(path)) |> str_r
 
 default_arg <- function(args, key, value) if (is.null(args[[key]])) value else args[[key]]
 
+# Re-fit ash's univariate mixture directly (bypassing TRADEtools::TRADE) so we can
+# choose the optimizer. Mirrors TRADEtools:::get_distribution_output's math exactly
+# (same grange/mixcompdist/prior, same mean/variance/kappa formulas) so results are
+# comparable to out$distribution_summary from TRADEtools::TRADE().
+refit_ash_stats <- function(l2fc, se, n_genes, optmethod = NULL) {
+  ash_args <- list(betahat = l2fc, sebetahat = se, mixcompdist = "halfuniform",
+                    outputlevel = 3, grange = c(min(l2fc), max(l2fc)), prior = "uniform")
+  if (!is.null(optmethod)) ash_args$optmethod <- optmethod
+  fit <- withCallingHandlers(
+    do.call(ashr::ash, ash_args),
+    warning = function(w) if (grepl("nullbiased", conditionMessage(w))) invokeRestart("muffleWarning")
+  )
+  g <- fit$fitted_g
+  means <- (g$a + g$b) / 2
+  vars  <- (1 / 12) * (g$b - g$a)^2
+  mu    <- sum(g$pi * means)
+  variance <- sum(g$pi * (means - mu)^2) + sum(g$pi * vars)
+  fm <- (1 / 5) * ((((g$b - mu)^5) - ((g$a - mu)^5)) / (g$b - mu - g$a + mu))
+  fm[1] <- 0
+  kappa <- sum(g$pi * fm) / variance^2
+  list(TI = variance, Me = 3 * n_genes / kappa, n_active = sum(g$pi > 1e-6))
+}
+
+# pi_DEG = 3 * n_genes / kappa (excess kurtosis of the fitted ash mixture); pi_DEG can
+# exceed n_genes only when kappa < 3 (platykurtic), which real transcriptome-wide effect
+# distributions essentially never are (TRADE paper: leptokurtic, median pi_DEG ~45
+# genome-wide, ~500 for essential-gene perturbations). Verified directly against the raw
+# SciPlex pseudobulk DE tables: ashr's default optimizer (mixsqp) sometimes converges to
+# a degenerate single-component mixture (kappa lands exactly at 1.8, the kurtosis of a
+# continuous uniform) at essentially the same log-likelihood as a proper multi-component
+# fit -- a numerical-optimization artifact, not signal. n_active <= 2 catches the same
+# failure mode even on the rare occasion it doesn't push pi_DEG above n_genes.
+is_degenerate_trade <- function(Me, n_genes, n_active) {
+  !is.finite(Me) || Me > n_genes || n_active <= 2
+}
+
 trade_one <- function(tbl, n_sample = NULL) {
   context     <- unique(tbl$cell_line)[1]
   context_key <- unique(tbl$context_key)[1]
@@ -36,7 +72,8 @@ trade_one <- function(tbl, n_sample = NULL) {
 
   failed <- function(msg) tibble(
     context = context, context_key = context_key, drug = drug,
-    n_genes_trade = nrow(trade_input), TI = NA_real_, pi_DEG = NA_real_, trade_error = msg
+    n_genes_trade = nrow(trade_input), TI = NA_real_, pi_DEG = NA_real_,
+    null_weight = NA_real_, kappa = NA_real_, trade_flag = NA_character_, trade_error = msg
   )
 
   if (nrow(trade_input) < 10) return(failed("Fewer than 10 finite genes retained for TRADE"))
@@ -52,11 +89,36 @@ trade_one <- function(tbl, n_sample = NULL) {
 
   if (inherits(out, "error")) return(failed(conditionMessage(out)))
 
+  n_genes  <- nrow(trade_input)
+  pi_DEG   <- out$distribution_summary$Me
+  TI       <- out$distribution_summary$transcriptome_wide_impact
+  n_active <- sum(out$fit$distribution$pi > 1e-6)
+  trade_flag <- NA_character_
+
+  if (is_degenerate_trade(pi_DEG, n_genes, n_active)) {
+    retry <- tryCatch(
+      refit_ash_stats(trade_input$log2FoldChange, trade_input$lfcSE, n_genes, optmethod = "mixEM"),
+      error = function(e) NULL
+    )
+    if (!is.null(retry) && !is_degenerate_trade(retry$Me, n_genes, retry$n_active)) {
+      pi_DEG <- retry$Me; TI <- retry$TI; n_active <- retry$n_active
+      trade_flag <- "mixsqp_degenerate_refit_mixEM"
+    } else {
+      trade_flag <- "mixsqp_degenerate_unresolved"
+    }
+  }
+
+  kappa       <- 3 * n_genes / pi_DEG
+  null_weight <- out$fit$distribution$pi[1]
+
   tibble(
     context = context, context_key = context_key, drug = drug,
-    n_genes_trade = nrow(trade_input),
-    TI = out$distribution_summary$transcriptome_wide_impact,
-    pi_DEG = out$distribution_summary$Me,
+    n_genes_trade = n_genes,
+    TI = TI,
+    pi_DEG = pi_DEG,
+    null_weight = null_weight,
+    kappa = kappa,
+    trade_flag = trade_flag,
     trade_error = NA_character_
   )
 }

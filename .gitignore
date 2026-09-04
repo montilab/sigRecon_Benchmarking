@@ -1,3 +1,4 @@
+.gitignore
 data/
 results/plots/*
 sigrecon/
@@ -14,3 +15,7 @@ scripts/*/.ipynb_checkpoints
 scripts/*/*/.ipynb_checkpoints
 *.o*
 *.log
+.zenodo_token
+.zenodo_prod_token
+pb_data/
+zenodo_staging/
