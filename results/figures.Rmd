@@ -2664,7 +2664,7 @@ p_dm_class_delta
 
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/drugmatrix_class_delta_NES.pdf"),
-       p_dm_class_delta, width = 8, height = 5, dpi = 400, device = cairo_pdf)
+       p_dm_class_delta, width = 8, height = 5, dpi = 400, device = "pdf")
 ```
 
 # SciPlex Drug Class {.tabset}
@@ -2778,7 +2778,7 @@ p_sc_class_delta
 
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/sciplex_class_delta_NES.pdf"),
-       p_sc_class_delta, width = 8, height = 5, dpi = 400, device = cairo_pdf)
+       p_sc_class_delta, width = 8, height = 5, dpi = 400, device = "pdf")
 ```
 
 ## HDAC vs Non-HDAC
