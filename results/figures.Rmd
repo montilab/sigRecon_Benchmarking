@@ -4517,7 +4517,7 @@ panel_fig_pideg
 
 ```{r}
 ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig5_pideg.pdf"),
-       panel_fig_pideg, width = 8, height = 6.5, dpi = 400, device = cairo_pdf)
+       panel_fig_pideg, width = 8, height = 6.5, dpi = 400, device = pdf)
 ```
 
 # Source metric distributions and delta vs source
