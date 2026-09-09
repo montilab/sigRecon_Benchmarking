@@ -4151,8 +4151,14 @@ ti_delta_eval <- bind_rows(
     transmute(dataset = "SciPlex", source, gene,
               delta_NES = NES_TRUE - NES_FALSE),
   readRDS(file.path(RESULTS_PATH, "tahoe/network_prop_90th_eval_table.rds")) %>%
-    transmute(dataset = "Tahoe", source, gene,
-              delta_NES = NES_TRUE - NES_FALSE)
+    # This table stacks all 10 CV splits per (gene, target) -- unlike the other
+    # three datasets' 90th eval tables, which are already collapsed to one row
+    # per perturbation upstream. Collapse via median here too (same convention
+    # as the Tahoe MOA chunk's group_by(method, regime, gene, target)), else
+    # perturbations are overcounted up to 10x by split-stacking alone.
+    group_by(source, gene, target) %>%
+    summarise(delta_NES = median(NES_TRUE - NES_FALSE, na.rm = TRUE), .groups = "drop") %>%
+    transmute(dataset = "Tahoe", source, gene, delta_NES)
 )
 
 # Source-context TI for all datasets
