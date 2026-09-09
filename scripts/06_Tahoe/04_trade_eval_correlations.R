@@ -165,9 +165,9 @@ plot_scatter <- function(df, x_col, y_col, target_col, title, subtitle, out_file
 
 run_trade_eval_correlations <- function(eval_paths, de_rds, output_dir, source_cell_line = "NCI-H23", n_sample = NULL) {
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-  # trade_metrics <- compute_trade_metrics(de_rds, n_sample = n_sample)
-  # saveRDS(trade_metrics, file.path(output_dir, "context_trade_metrics.rds"))
-  trade_metrics <- readRDS(file.path(output_dir, "context_trade_metrics.rds"))
+  trade_metrics <- compute_trade_metrics(de_rds, n_sample = n_sample)
+  saveRDS(trade_metrics, file.path(output_dir, "context_trade_metrics.rds"))
+  # trade_metrics <- readRDS(file.path(output_dir, "context_trade_metrics.rds"))
   all_cor <- list()
   for (eval_path in eval_paths) {
     label <- clean_label(eval_path); message("Processing eval table: ", eval_path)

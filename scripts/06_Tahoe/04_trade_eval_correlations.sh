@@ -3,7 +3,7 @@
 #$ -N tahoe_trade_eval_cor
 #$ -m e
 #$ -j y
-#$ -P el-studies
+#$ -P findthecause
 #$ -pe omp 16
 
 cd /rprojectnb2/montilab-p/projects/brcameta/projects/sig_recon/scripts/06_Tahoe
