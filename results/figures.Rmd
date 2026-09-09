@@ -4039,7 +4039,7 @@ ti_df <- bind_rows(
     transmute(dataset = "Perturb-seq", TI),
   readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds")) %>%
     transmute(dataset = "SciPlex", TI),
-  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds")) %>%
+  readRDS(file.path(ti_path, "tahoe_projectCor/context_trade_metrics.rds")) %>%
     transmute(dataset = "Tahoe", TI)
 ) %>%
   filter(is.finite(TI)) %>%
@@ -4163,7 +4163,7 @@ ti_all <- bind_rows(
     transmute(dataset = "Perturb-seq", context_key, drug, TI),
   readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds")) %>%
     transmute(dataset = "SciPlex", context_key, drug, TI),
-  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds")) %>%
+  readRDS(file.path(ti_path, "tahoe_projectCor/context_trade_metrics.rds")) %>%
     transmute(dataset = "Tahoe", context_key, drug, TI)
 )
 
@@ -4307,31 +4307,43 @@ ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig5_combined_panel.pdf"),
 # Fig 5b: pi_DEG × Delta NES
 
 ```{r fig5b-pideg, message=FALSE, warning=FALSE}
-# NOTE (flagged in review, unresolved as of this commit): pi_DEG values cached in
-# these context_trade_metrics.rds files run 2-3 orders of magnitude above the TRADE
-# paper's own benchmarks (median 45 genome-wide K562, >500 for essential-gene
-# perturbations); PI_LOW/PI_HIGH below were chosen to split *this* (likely inflated)
-# distribution into thirds, not against an external reference. scripts/*/*_trade_eval_
-# correlations.R now compute a per-perturbation trade_flag ("pi_DEG_exceeds_n_genes")
-# that catches the mathematically-extreme tail (pi_DEG > n_genes_trade, which requires
-# ash's fitted excess kurtosis < 3 -- essentially never true for real transcriptomes),
-# but the cached RDS files here predate that change and don't have the column yet.
-# Re-run compute_trade_metrics() on HPC to regenerate them before trusting this panel;
-# the filter below activates automatically once trade_flag is present.
+# NOTE (review thread): pi_DEG values originally cached here ran 2-3 orders of
+# magnitude above the TRADE paper's own benchmarks (median 45 genome-wide K562,
+# >500 for essential-gene perturbations). Root cause: ashr's default optimizer
+# (mixsqp) silently collapses to a degenerate single-uniform-component mixture for
+# a large fraction of fits -- verified directly against raw pseudobulk DE tables,
+# reproducible, kappa lands exactly at 1.8 (the kurtosis of a continuous uniform)
+# -- at ~the same log-likelihood as a proper multi-component fit, so mixsqp itself
+# rarely flags it as non-convergence. scripts/*/*_trade_eval_correlations.R now
+# retry degenerate fits with the classic mixEM optimizer and record the outcome in
+# trade_flag: "mixsqp_degenerate_refit_mixEM" means the retry fixed it (keep the
+# corrected pi_DEG), "mixsqp_degenerate_unresolved" means it's still degenerate
+# even after retry (drop it). After the HPC rerun, SciPlex's median pi_DEG fell
+# 10,942 -> 24 (in line with the TRADE baseline); DrugMatrix/Perturb-seq/Tahoe
+# barely moved (medians still ~1,600-3,100) because <5% of their fits were
+# actually degenerate by this mechanism -- their non-flagged fits have
+# legitimate kappa > 3, so the remaining elevation looks like a real difference
+# in effect-size distribution shape rather than this bug, and is unresolved/open.
 PI_LOW  <- 2000
 PI_HIGH <- 4000
 
 pideg_cat_levels <- c("Low (<2k)", "Medium (2k–4k)", "High (≥4k)")
 
+# Keep rows that either converged cleanly (trade_flag NA) or were successfully
+# repaired by the mixEM retry; drop only the still-unresolved degenerate fits.
 drop_flagged <- function(df) {
-  if ("trade_flag" %in% names(df)) dplyr::filter(df, is.na(trade_flag)) else df
+  if ("trade_flag" %in% names(df)) {
+    dplyr::filter(df, is.na(trade_flag) | trade_flag != "mixsqp_degenerate_unresolved")
+  } else {
+    df
+  }
 }
 
 pideg_all <- bind_rows(
   readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds"))  %>% drop_flagged() %>% transmute(dataset = "DrugMatrix",  TI, pi_DEG),
   readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>% drop_flagged() %>% transmute(dataset = "Perturb-seq", TI, pi_DEG),
   readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds"))     %>% drop_flagged() %>% transmute(dataset = "SciPlex",     TI, pi_DEG),
-  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds"))       %>% drop_flagged() %>% transmute(dataset = "Tahoe",       TI, pi_DEG)
+  readRDS(file.path(ti_path, "tahoe_projectCor/context_trade_metrics.rds"))       %>% drop_flagged() %>% transmute(dataset = "Tahoe",       TI, pi_DEG)
 ) %>%
   filter(is.finite(pi_DEG)) %>%
   mutate(
@@ -4383,7 +4395,7 @@ pideg_join_df <- bind_rows(
   readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds"))  %>% drop_flagged() %>% transmute(dataset = "DrugMatrix",  context_key, drug, pi_DEG),
   readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>% drop_flagged() %>% transmute(dataset = "Perturb-seq", context_key, drug, pi_DEG),
   readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds"))     %>% drop_flagged() %>% transmute(dataset = "SciPlex",     context_key, drug, pi_DEG),
-  readRDS(file.path(ti_path, "tahoe/context_trade_metrics.rds"))       %>% drop_flagged() %>% transmute(dataset = "Tahoe",       context_key, drug, pi_DEG)
+  readRDS(file.path(ti_path, "tahoe_projectCor/context_trade_metrics.rds"))       %>% drop_flagged() %>% transmute(dataset = "Tahoe",       context_key, drug, pi_DEG)
 )
 
 pideg_delta_joined <- ti_delta_eval %>%
