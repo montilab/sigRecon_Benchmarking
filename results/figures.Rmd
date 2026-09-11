@@ -4487,12 +4487,31 @@ pideg_signif_df <- pideg_signif_df %>%
   mutate(y_position = y_max + row_number() * y_range * 0.13) %>%
   ungroup()
 
+# facet_wrap(scales = "free") drops any pideg_cat level with zero rows in a
+# given dataset's panel (e.g. DrugMatrix/Tahoe have no "Low" pi_DEG
+# perturbations here), which compacts that panel's actual x-axis positions.
+# match() against the global 3-level pideg_cat_levels doesn't account for
+# that, so brackets involving a missing category land one+ slots to the right
+# of where the boxes actually are. Use each dataset's own present-category
+# rank instead.
+pideg_local_x <- pideg_delta_joined %>%
+  distinct(dataset, pideg_cat) %>%
+  arrange(dataset, pideg_cat) %>%
+  group_by(dataset) %>%
+  mutate(local_x = row_number()) %>%
+  ungroup() %>%
+  mutate(pideg_cat = as.character(pideg_cat))
+
 pideg_signif_annot <- pideg_signif_df %>%
+  mutate(dataset = as.character(dataset)) %>%
+  left_join(pideg_local_x, by = c("dataset", "xmin" = "pideg_cat")) %>%
+  rename(x1 = local_x) %>%
+  left_join(pideg_local_x, by = c("dataset", "xmax" = "pideg_cat")) %>%
+  rename(x2 = local_x) %>%
   mutate(
-    x1   = match(xmin, pideg_cat_levels),
-    x2   = match(xmax, pideg_cat_levels),
-    xmid = (x1 + x2) / 2,
-    tip  = y_range * 0.025
+    dataset = factor(dataset, levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")),
+    xmid    = (x1 + x2) / 2,
+    tip     = y_range * 0.025
   )
 
 # Panel C: Delta NES boxplot by pi_DEG category — one row, n labels on x-axis
