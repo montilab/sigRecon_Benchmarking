@@ -4690,13 +4690,24 @@ best_90th_all <- best_90th_all %>%
     jacc_avg = (jacc_TRUE + jacc_FALSE) / 2
   )
 
+# A plain delta_NES ~ NES_avg fit is misleading here: whether the prediction
+# keeps the source's NES sign or flips it splits each dataset into two
+# structurally different diagonal streaks (most visibly for Tahoe, where 27%
+# of predictions flip sign vs. 1-9% for the others), and a single line across
+# both drags the slope toward whichever streak has more points rather than
+# describing either one. Fit with sign_pred_NES as a covariate (same as the
+# panels-C/D scatter-vs-source version above) and draw the marginal line at
+# each dataset's observed sign-flip proportion.
 nes_ba_lines <- best_90th_all %>%
   dplyr::group_by(dataset) %>%
   dplyr::group_modify(~{
-    fit   <- lm(delta_NES ~ NES_avg, data = .x)
-    x_seq <- seq(min(.x$NES_avg), max(.x$NES_avg), length.out = 80)
-    tibble::tibble(NES_avg = x_seq,
-                   delta_NES_fit = predict(fit, newdata = tibble::tibble(NES_avg = x_seq)))
+    fit    <- lm(delta_NES ~ NES_avg + sign_pred_NES, data = .x)
+    beta   <- coef(fit)
+    prop_t <- mean(.x$sign_pred_NES)
+    intercept <- beta["(Intercept)"] + beta["sign_pred_NESTRUE"] * prop_t
+    slope     <- beta["NES_avg"]
+    x_seq     <- seq(min(.x$NES_avg), max(.x$NES_avg), length.out = 80)
+    tibble::tibble(NES_avg = x_seq, delta_NES_fit = intercept + slope * x_seq)
   }) %>%
   dplyr::ungroup()
 
