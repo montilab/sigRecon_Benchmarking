@@ -4032,15 +4032,26 @@ ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig3_Jacc.pdf"),
 ```{r ti-distributions, message=FALSE, warning=FALSE}
 ti_path <- file.path(PROJECT_PATH, "results/plots/trade_metric_correlations")
 
+# Keep rows that either converged cleanly (trade_flag NA) or were successfully
+# repaired by the mixEM retry; drop only the still-unresolved degenerate fits.
+# (Same convention as Fig 5b; defined here too since this chunk runs first.)
+drop_flagged <- function(df) {
+  if ("trade_flag" %in% names(df)) {
+    dplyr::filter(df, is.na(trade_flag) | trade_flag != "mixsqp_degenerate_unresolved")
+  } else {
+    df
+  }
+}
+
 ti_df <- bind_rows(
   readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds")) %>%
-    transmute(dataset = "DrugMatrix", TI),
+    drop_flagged() %>% transmute(dataset = "DrugMatrix", TI),
   readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>%
-    transmute(dataset = "Perturb-seq", TI),
+    drop_flagged() %>% transmute(dataset = "Perturb-seq", TI),
   readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds")) %>%
-    transmute(dataset = "SciPlex", TI),
+    drop_flagged() %>% transmute(dataset = "SciPlex", TI),
   readRDS(file.path(ti_path, "tahoe_projectCor/context_trade_metrics.rds")) %>%
-    transmute(dataset = "Tahoe", TI)
+    drop_flagged() %>% transmute(dataset = "Tahoe", TI)
 ) %>%
   filter(is.finite(TI)) %>%
   mutate(dataset = factor(dataset, levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe")))
@@ -4099,16 +4110,24 @@ ggsave(file.path(PROJECT_PATH, "results/plots/ti_distributions_ccdf.png"),
 
 ```{r}
 # Proportional bar chart by TI category.
-# Bins: zero, low (0, 0.1], medium (0.1, 0.5], high (> 0.5)
+# Cutoffs anchored to the TRADE paper's own TI bins rather than a data-derived
+# percentile split (percentile-based cuts on the pooled distribution put e.g.
+# 94% of SciPlex into "Low" pi_DEG once its degenerate-fit inflation was
+# corrected -- dataset medians differ too much for a shared quantile cut to be
+# meaningfully balanced within any one dataset; fixed, externally-defined
+# thresholds are comparable across datasets on their own terms instead).
+TI_LOW  <- 0.004
+TI_HIGH <- 0.4
+
 ti_cat_df <- ti_df %>%
   mutate(ti_cat = case_when(
-    TI <  0.1 ~ "Low [0–0.1)",
-    TI <  0.5 ~ "Medium [0.1–0.5)",
-    TRUE      ~ "High (≥0.5)"
+    TI <  TI_LOW  ~ "Low [0–0.004)",
+    TI <  TI_HIGH ~ "Medium [0.004–0.4)",
+    TRUE          ~ "High (≥0.4)"
   )) %>%
   mutate(ti_cat = factor(ti_cat,
-                         levels = c("Low [0–0.1)", "Medium [0.1–0.5)",
-                                    "High (≥0.5)")))
+                         levels = c("Low [0–0.004)", "Medium [0.004–0.4)",
+                                    "High (≥0.4)")))
 
 ti_cat_summary <- ti_cat_df %>%
   count(dataset, ti_cat) %>%
@@ -4164,13 +4183,13 @@ ti_delta_eval <- bind_rows(
 # Source-context TI for all datasets
 ti_all <- bind_rows(
   readRDS(file.path(ti_path, "drugmatrix/context_trade_metrics.rds")) %>%
-    transmute(dataset = "DrugMatrix", context_key, drug, TI),
+    drop_flagged() %>% transmute(dataset = "DrugMatrix", context_key, drug, TI),
   readRDS(file.path(ti_path, "perturb_seq/context_trade_metrics.rds")) %>%
-    transmute(dataset = "Perturb-seq", context_key, drug, TI),
+    drop_flagged() %>% transmute(dataset = "Perturb-seq", context_key, drug, TI),
   readRDS(file.path(ti_path, "sciplex/context_trade_metrics.rds")) %>%
-    transmute(dataset = "SciPlex", context_key, drug, TI),
+    drop_flagged() %>% transmute(dataset = "SciPlex", context_key, drug, TI),
   readRDS(file.path(ti_path, "tahoe_projectCor/context_trade_metrics.rds")) %>%
-    transmute(dataset = "Tahoe", context_key, drug, TI)
+    drop_flagged() %>% transmute(dataset = "Tahoe", context_key, drug, TI)
 )
 
 # Normalize eval `source` to match TI `context_key`:
@@ -4192,12 +4211,12 @@ ti_delta_joined <- ti_delta_eval %>%
   filter(!is.na(TI), !is.na(delta_NES)) %>%
   mutate(
     ti_cat = case_when(
-      TI <  0.1 ~ "Low [0–0.1)",
-      TI <  0.5 ~ "Medium [0.1–0.5)",
-      TRUE      ~ "High (≥0.5)"
+      TI <  TI_LOW  ~ "Low [0–0.004)",
+      TI <  TI_HIGH ~ "Medium [0.004–0.4)",
+      TRUE          ~ "High (≥0.4)"
     ),
-    ti_cat  = factor(ti_cat, levels = c("Low [0–0.1)", "Medium [0.1–0.5)",
-                                         "High (≥0.5)")),
+    ti_cat  = factor(ti_cat, levels = c("Low [0–0.004)", "Medium [0.004–0.4)",
+                                         "High (≥0.4)")),
     dataset = factor(dataset,
                      levels = c("DrugMatrix", "Perturb-seq", "SciPlex", "Tahoe"))
   )
@@ -4208,10 +4227,10 @@ ti_delta_joined <- ti_delta_eval %>%
 # Only retain p < 0.05; use ggsignif manual mode to avoid the ggpubr/ggsignif
 # bug where hide.ns = TRUE suppresses the label but still draws the bracket line.
 ti_comp_pairs <- tibble::tribble(
-  ~higher,              ~lower,
-  "Medium [0.1–0.5)", "Low [0–0.1)",
-  "High (≥0.5)",      "Medium [0.1–0.5)",
-  "High (≥0.5)",      "Low [0–0.1)"
+  ~higher,                ~lower,
+  "Medium [0.004–0.4)", "Low [0–0.004)",
+  "High (≥0.4)",        "Medium [0.004–0.4)",
+  "High (≥0.4)",        "Low [0–0.004)"
 )
 
 ti_signif_df <- purrr::map_dfr(
@@ -4253,7 +4272,7 @@ ti_signif_df <- ti_signif_df %>%
   mutate(y_position = y_max + row_number() * y_range * 0.13) %>%
   ungroup()
 
-ti_cat_levels_ordered <- c("Low [0–0.1)", "Medium [0.1–0.5)", "High (≥0.5)")
+ti_cat_levels_ordered <- c("Low [0–0.004)", "Medium [0.004–0.4)", "High (≥0.4)")
 signif_annot <- ti_signif_df %>%
   mutate(
     x1   = match(xmin, ti_cat_levels_ordered),
@@ -4330,10 +4349,16 @@ ggsave(file.path(PROJECT_PATH, "results/plots/paper_fig5_combined_panel.pdf"),
 # actually degenerate by this mechanism -- their non-flagged fits have
 # legitimate kappa > 3, so the remaining elevation looks like a real difference
 # in effect-size distribution shape rather than this bug, and is unresolved/open.
-PI_LOW  <- 2000
-PI_HIGH <- 4000
+#
+# PI_LOW/PI_HIGH anchored to the TRADE paper's own pi_DEG bins (median ~45
+# genome-wide, essential-gene perturbations >500) rather than a data-derived
+# percentile split -- pooled-quantile cutoffs on this data put e.g. 94% of
+# SciPlex into "Low" once its degenerate-fit inflation was corrected, since
+# per-dataset medians differ far more than a shared quantile cut can balance.
+PI_LOW  <- 45
+PI_HIGH <- 500
 
-pideg_cat_levels <- c("Low (<2k)", "Medium (2k–4k)", "High (≥4k)")
+pideg_cat_levels <- c("Low (<45)", "Medium (45–500)", "High (≥500)")
 
 # Keep rows that either converged cleanly (trade_flag NA) or were successfully
 # repaired by the mixEM retry; drop only the still-unresolved degenerate fits.
