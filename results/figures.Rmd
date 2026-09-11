@@ -4677,6 +4677,69 @@ ggsave(file.path(PROJECT_PATH, "results/plots/source_dist_delta_combined.pdf"),
        fig_source_delta, width = 10, height = 7, dpi = 400, device = cairo_pdf)
 ```
 
+```{r source-dist-delta-bland-altman, message=FALSE, warning=FALSE}
+# Bland-Altman version of panels C/D above: difference (y - x) on the y-axis
+# plotted against the mean ((y + x) / 2) on the x-axis, rather than against x
+# (the source value) alone -- x = NES_FALSE/jacc_FALSE (source), y =
+# NES_TRUE/jacc_TRUE (predicted). Avoids the artifact of correlating a
+# difference with one of its own two inputs; reuses best_90th_all, ditto_pal,
+# p_dist_NES, p_dist_jacc, no_legend, and shared_legend from the chunk above.
+best_90th_all <- best_90th_all %>%
+  dplyr::mutate(
+    NES_avg  = (NES_TRUE + NES_FALSE) / 2,
+    jacc_avg = (jacc_TRUE + jacc_FALSE) / 2
+  )
+
+nes_ba_lines <- best_90th_all %>%
+  dplyr::group_by(dataset) %>%
+  dplyr::group_modify(~{
+    fit   <- lm(delta_NES ~ NES_avg, data = .x)
+    x_seq <- seq(min(.x$NES_avg), max(.x$NES_avg), length.out = 80)
+    tibble::tibble(NES_avg = x_seq,
+                   delta_NES_fit = predict(fit, newdata = tibble::tibble(NES_avg = x_seq)))
+  }) %>%
+  dplyr::ungroup()
+
+p_ba_NES <- ggplot(best_90th_all, aes(x = NES_avg, y = delta_NES, color = dataset)) +
+  geom_point(alpha = 0.2, size = 0.6) +
+  geom_line(data = nes_ba_lines, aes(x = NES_avg, y = delta_NES_fit, color = dataset),
+            linewidth = 0.8, inherit.aes = FALSE) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+  scale_color_manual(values = ditto_pal, name = "Dataset") +
+  labs(x = "Mean NES ((source + predicted) / 2)", y = "Delta NES (predicted − source)") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right")
+
+p_ba_jacc <- ggplot(best_90th_all, aes(x = jacc_avg, y = delta_jacc, color = dataset)) +
+  geom_point(alpha = 0.2, size = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+  scale_color_manual(values = ditto_pal, name = "Dataset") +
+  labs(x = "Mean Jaccard ((source + predicted) / 2)", y = "Delta Jaccard (predicted − source)") +
+  theme_classic(base_size = 9) +
+  theme(legend.position = "right")
+
+panel_grid_ba <- cowplot::plot_grid(
+  p_dist_NES    + no_legend,
+  p_dist_jacc   + no_legend,
+  p_ba_NES      + no_legend,
+  p_ba_jacc     + no_legend,
+  nrow = 2, labels = c("A", "B", "C", "D"), label_size = 11
+)
+
+fig_source_delta_ba <- cowplot::plot_grid(
+  panel_grid_ba, shared_legend,
+  nrow = 1, rel_widths = c(1, 0.12)
+)
+
+fig_source_delta_ba
+```
+
+```{r}
+ggsave(file.path(PROJECT_PATH, "results/plots/source_dist_delta_bland_altman.pdf"),
+       fig_source_delta_ba, width = 10, height = 7, dpi = 400, device = cairo_pdf)
+```
+
 ```{r source-pred-vs-src, message=FALSE, warning=FALSE}
 # Panels A/B reuse distributions from above; C/D are direct pred ~ source scatters
 # that avoid the spurious negative correlation in delta ~ source formulations.
